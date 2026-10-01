@@ -1,0 +1,34 @@
+# Go
+/go/out/
+/go/pkg/
+*.o
+*.out
+
+# Dart/Flutter
+.dart_tool/
+.pub/
+build/
+*.lock
+.g.dart_tool/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets
+*.key
+*.pem
+*.cert
+knots/
+weftlink.db
+
+# Gen consistency — CI regenerates
+gen/go/
+gen/dart/
+gen/arkts/

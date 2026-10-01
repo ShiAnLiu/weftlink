@@ -1,0 +1,7 @@
+// HarmonyOS ArkTS package stub — M6
+{
+  "name": "weftlink-harmony",
+  "version": "0.1.0",
+  "description": "Weftlink thin client for HarmonyOS NEXT",
+  "dependencies": {}
+}

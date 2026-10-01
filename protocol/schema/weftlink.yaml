@@ -1,0 +1,88 @@
+# Weft Protocol Schema — M0 first draft
+# Canonical source of truth. All gen/ code derived from this.
+
+---
+version: "0.1.0"
+types:
+  NodeAddress:
+    description: "Network address of a weftlink node"
+    fields:
+      transport: { type: string, enum: [tcp, udp, shuttle], required: true }
+      host:      { type: string, required: true }
+      port:      { type: uint16, required: true }
+
+  NodeInfo:
+    description: "Node identity and capabilities"
+    fields:
+      node_id:     { type: string, required: true }
+      display_name: { type: string, required: false }
+      role:        { type: string, enum: [warp, weft], required: true }
+      version:     { type: string, required: true }
+      addresses:   { type: "list<NodeAddress>", required: false }
+
+  Peer:
+    description: "A known peer node"
+    fields:
+      peer_id:     { type: string, required: true }
+      display_name: { type: string, required: false }
+      role:        { type: string, enum: [warp, weft], required: true }
+      is_warped:   { type: bool, required: true, description: "woven in (paired)" }
+      is_wefted:   { type: bool, required: true, description: "woven out (active session)" }
+      last_seen:   { type: string, required: false, description: "ISO 8601" }
+
+messages:
+  Hello:
+    description: "Initial handshake message"
+    fields:
+      node:   { type: NodeInfo, required: true }
+      nonce:  { type: string, required: true }
+
+  PairRequest:
+    description: "Initiate pairing using a 6-character code"
+    fields:
+      pair_code: { type: string, required: true, pattern: "^[A-Z0-9]{6}$" }
+      node:      { type: NodeInfo, required: true }
+
+  PairConfirm:
+    description: "Confirm pairing"
+    fields:
+      node:         { type: NodeInfo, required: true }
+      fingerprint:  { type: string, required: true, description: "Ed25519 public key fingerprint (hex)" }
+
+  Ping:
+    description: "Liveness check"
+    fields:
+      nonce:  { type: string, required: true }
+      ts:     { type: uint64, required: true, description: "unix timestamp ms" }
+
+  FileOffer:
+    description: "Offer a file transfer"
+    fields:
+      file_id:  { type: string, required: true }
+      name:     { type: string, required: true }
+      size:     { type: uint64, required: true }
+      mime:     { type: string, required: false }
+      checksum: { type: string, required: false, description: "SHA-256 hex" }
+
+  FileChunk:
+    description: "File data chunk"
+    fields:
+      file_id: { type: string, required: true }
+      offset:  { type: uint64, required: true }
+      data:    { type: bytes, required: true }
+      final:   { type: bool, required: true }
+
+  ClipboardUpdate:
+    description: "Clipboard content synchronization"
+    fields:
+      text:  { type: string, required: true }
+      mime:  { type: string, required: false, default: "text/plain" }
+      ts:    { type: uint64, required: true, description: "unix timestamp ms" }
+
+  ExecRequest:
+    description: "Remote command execution request"
+    fields:
+      exec_id: { type: string, required: true }
+      command: { type: string, required: true }
+      cwd:     { type: string, required: false }
+      timeout: { type: uint32, required: false, description: "seconds, 0 = no limit" }
