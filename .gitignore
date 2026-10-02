@@ -32,3 +32,4 @@ weftlink.db
 gen/go/
 gen/dart/
 gen/arkts/*.exe
+bin/
