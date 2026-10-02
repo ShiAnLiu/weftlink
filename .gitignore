@@ -31,4 +31,4 @@ weftlink.db
 # Gen consistency — CI regenerates
 gen/go/
 gen/dart/
-gen/arkts/
+gen/arkts/*.exe
