@@ -26,17 +26,41 @@ Last updated: 2026-10-02
 - ✅ docs 全套（ROADMAP / STATUS / permissions / clients-matrix / platform-matrix / ADR-0001）
 - ✅ Apache-2.0 LICENSE / README / CHANGELOG
 
-## CI/CD 管道（已验证）
+## M0.5 进度
 
-- **CI**：push main → 三平台（win/ubuntu/mac）build/vet/test + gofmt + schema 校验，全绿
-- **CD**：push tag v* → 交叉编译 weftlinkd（windows/linux/darwin amd64）→ GitHub Release 附二进制
-- **端到端验证**：v0.1.0 release 产物下载后运行正常（weftlinkd v0.1.0 ready on port 7801）
-- **M0.5 spike ① 预验证**：Windows 本机交叉编译 Linux ELF / macOS 二进制成功
+### ✅ ① Go 交叉编译三平台 + TCP echo 互通（~80%）
 
-## 待办（M0.5）
+- 交叉编译：CI Release 已验证 → 三平台二进制 ✅
+- TCP 回环集成测试：5 个测试全通（hello/ping/status/unknown/multi-frame）✅
+- 外部客户端直连：Wi-Fi IP `192.168.43.34:7801` 验证 ok ✅
+- Windows 防火墙规则已添加 ✅
+- ⬜ TLS 加密（当前是明文 TCP）
+- ⬜ 真双机（需手机端 hdc 确认 + ArkTS App 跑通）
 
-- [x] ① Go 交叉编译三平台 ✅（CI release 已验证；双机 TLS echo 互通待做）
-- [ ] ② gomobile 安卓真机验证（ADR-0001 判决点）
-- [ ] ③ Flutter 桌面回环连 daemon
-- [ ] ④ schema → Go/Dart 类型生成试跑
-- [ ] ⑤ Windows 输入注入预演
+### ⬜ ② gomobile 安卓真机验证
+
+Mate X7 是 HarmonyOS NEXT，不走 gomobile 路线。焊死 → 改走 ArkTS 客户端路线。
+
+### ⬜ ③ Flutter 桌面回环连 daemon
+
+FakeCoreClient 已就绪；真回环实现待写。依赖 Dart SDK 可用。
+
+### ⬜ ④ schema → Go/Dart 类型生成试跑
+
+tools/gen 还是空壳。
+
+### ⬜ ⑤ Windows 输入注入预演
+
+未开始。
+
+### 另：ArkTS 薄客户端（超前 M6）
+
+- `weftclient.ets`：TCP 客户端 + Weft Protocol 帧解析 ✅
+- `pages/Index.ets`：主页 → 连 daemon → 显示状态 ✅
+- 待手机 USB 调试启用后 → 导入 DevEco Studio → 真机验证
+
+## CI/CD 管道
+
+- **CI**：push main → 三平台（win/ubuntu/macos）build/vet/test/gofmt/schema，全绿
+- **CD**：push tag v* → 交叉编译 → GitHub Release 附二进制
+- v0.1.0 released：weftlinkd-{darwin,linux,windows}-amd64
