@@ -1,0 +1,72 @@
+name: Release
+
+# CD: on tag push, cross-compile daemon for 3 platforms and attach
+# to a GitHub Release. Advances M0.5 spike item #1 (cross-compile).
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Cross-compile weftlinkd
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+          - goos: linux
+            goarch: amd64
+            ext: ""
+          - goos: darwin
+            goarch: amd64
+            ext: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - name: Build weftlinkd
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags="-s -w" -o "dist/weftlinkd-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}" ./src
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weftlinkd-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la dist/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          draft: false
+          prerelease: true
