@@ -26,3 +26,10 @@
 - `go vet ./...` green
 - `go test ./...` green (crypto unit tests)
 - `gofmt -l .` clean
+
+### CI/CD
+- CI: 3-platform matrix (windows/ubuntu/macos) build/vet/test/gofmt/schema — all green
+- CD: tag v* triggers cross-compile + GitHub Release with binaries
+- v0.1.0 released: weftlinkd-{darwin,linux}-amd64 + weftlinkd-windows-amd64.exe
+- Release artifact downloaded and verified running (M0.5 spike #1 cross-compile validated)
+- Fixed CI: pin Go via go-version-file; build to bin/ (src dir name collision on linux/mac)
