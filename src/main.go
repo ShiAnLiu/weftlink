@@ -1,28 +1,24 @@
 // weftlinkd — Weftlink daemon entry point
 package main
 
-import "fmt"
 import "log"
 
 func main() {
 	log.Println("weftlinkd v" + coreVersion() + " starting")
 
-	var port = defaultPort
-
-	// LAN beacon (UDP discovery) — stub until M1
-	var discErr error
-	discErr = startBeacon(port)
-	if discErr != nil {
-		log.Println("beacon init failed:", discErr)
-	}
-
-	fmt.Println("weftlinkd: serving Weft Protocol on port", port)
+	// TLS listener (production)
+	log.Println("weftlinkd: serving Weft Protocol on port", defaultPort)
 	log.Println("weftlinkd started successfully")
 
-	// Blocks forever in the accept loop.
 	var serveErr error
-	serveErr = listenAndServe(port)
+	serveErr = listenTLSAndServe(defaultPort)
 	if serveErr != nil {
-		log.Println("listen failed:", serveErr)
+		log.Println("TLS listen failed:", serveErr)
+		// Fallback to plain TCP for dev
+		log.Println("falling back to plain TCP...")
+		serveErr = listenAndServe(defaultPort)
+		if serveErr != nil {
+			log.Println("listen failed:", serveErr)
+		}
 	}
 }

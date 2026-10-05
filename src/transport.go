@@ -1,6 +1,7 @@
 // Transport: TCP listener + length-prefixed JSON framing (Weft Protocol)
 package main
 
+import "crypto/tls"
 import "encoding/binary"
 import "encoding/json"
 import "fmt"
@@ -10,7 +11,57 @@ import "net"
 
 const maxFrameSize = 1 << 20 // 1 MiB
 
-// -- Listener ----------------------------------------------------------------
+// -- TLS config -------------------------------------------------------------
+
+// loadTLSConfig loads (or generates) the self-signed server cert.
+func loadTLSConfig(cfg **tls.Config) error {
+	var certPath = "etc/weftlinkd-cert.pem"
+	var keyPath = "etc/weftlinkd-key.pem"
+	var genErr error
+	genErr = ensureTLSCert(certPath, keyPath)
+	if genErr != nil {
+		return genErr
+	}
+	var cert tls.Certificate
+	var err error
+	cert, err = tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		return err
+	}
+	var c = new(tls.Config)
+	c.Certificates = []tls.Certificate{cert}
+	*cfg = c
+	return nil
+}
+
+// newTestTLSConfig creates a client TLS config that skips verification (test).
+func newTestTLSConfig(cfg **tls.Config) {
+	var c = new(tls.Config)
+	c.InsecureSkipVerify = true
+	*cfg = c
+}
+
+// -- TLS Listener -----------------------------------------------------------
+
+func listenTLSAndServe(port int) error {
+	var cfg *tls.Config
+	var err error
+	err = loadTLSConfig(&cfg)
+	if err != nil {
+		return err
+	}
+	var addr = fmt.Sprintf(":%d", port)
+	var ln net.Listener
+	ln, err = tls.Listen("tcp", addr, cfg)
+	if err != nil {
+		return err
+	}
+	log.Println("weftlinkd TLS listening on", addr)
+	serveLoop(ln)
+	return nil
+}
+
+// -- TCP Listener (for tests / ephemeral port) ------------------------------
 
 // listenAndServe starts the daemon TCP listener on :port and blocks forever.
 func listenAndServe(port int) error {

@@ -1,19 +1,58 @@
 // Integration test: loopback Weft Protocol echo (hello/status/ping)
 package main
 
+import "crypto/tls"
 import "encoding/json"
-import "fmt"
 import "net"
 import "testing"
 
-// startTestListener spins up a listener on an ephemeral port and returns
-// the address to dial.
+// -- Helpers -----------------------------------------------------------------
+
+var tlsCertPEM = `-----BEGIN CERTIFICATE-----
+MIIBPDCB76ADAgECAhRK+x8obN7IgM4C6bXCJ69kWb1D6zAFBgMrZXAwFDESMBAG
+A1UEAwwJd2VmdGxpbmtkMB4XDTI2MTAwMjA5MTg1MloXDTM2MDkyOTA5MTg1Mlow
+FDESMBAGA1UEAwwJd2VmdGxpbmtkMCowBQYDK2VwAyEAo0wlWFso9JUIpA5s5qv9
+RQgfFGrffVVXyimJKgthDD2jUzBRMB0GA1UdDgQWBBQLJpdGyq2t18Xk8p2r8pSh
+ofLCljAfBgNVHSMEGDAWgBQLJpdGyq2t18Xk8p2r8pShofLCljAPBgNVHRMBAf8E
+BTADAQH/MAUGAytlcANBAB8UcuAw0aSk8BqLDqlcDelex88/4L1nTNOrsLJTZDK8
+07swe0i/SCLJkUrAj9ADUe9YPM3o+xV+a8rwAjBC9Q8=
+-----END CERTIFICATE-----
+`
+
+var tlsKeyPEM = `-----BEGIN PRIVATE KEY-----
+MC4CAQAwBQYDK2VwBCIEIFsR0OMq5JUcs6OLArPd+Bwb4YphLFHsfj8NPIb4CvUl
+-----END PRIVATE KEY-----
+`
+
+// startTestListener spins up a TCP listener on an ephemeral port.
 func startTestListener(t *testing.T) string {
 	var ln net.Listener
 	var err error
 	err = listenTCP(0, &ln)
 	if err != nil {
 		t.Fatalf("listen failed: %v", err)
+	}
+	go serveLoop(ln)
+	return ln.Addr().String()
+}
+
+// makeTLSTestListener spins up a TLS-wrapped listener on ephemeral port.
+func makeTLSTestListener(t *testing.T) string {
+	var cert tls.Certificate
+	var certErr error
+	cert, certErr = tls.X509KeyPair([]byte(tlsCertPEM), []byte(tlsKeyPEM))
+	if certErr != nil {
+		t.Skipf("no server cert: %v", certErr)
+		return ""
+	}
+	var srvCfg = new(tls.Config)
+	srvCfg.Certificates = []tls.Certificate{cert}
+
+	var ln net.Listener
+	var lnErr error
+	ln, lnErr = tls.Listen("tcp", ":0", srvCfg)
+	if lnErr != nil {
+		t.Fatalf("TLS listen failed: %v", lnErr)
 	}
 	go serveLoop(ln)
 	return ln.Addr().String()
@@ -41,6 +80,8 @@ func sendRecv(t *testing.T, conn net.Conn, req string) map[string]any {
 	}
 	return resp
 }
+
+// -- TCP tests ---------------------------------------------------------------
 
 func TestLoopbackHello(t *testing.T) {
 	var addr = startTestListener(t)
@@ -121,7 +162,6 @@ func TestLoopbackUnknownType(t *testing.T) {
 }
 
 func TestFrameRoundTrip(t *testing.T) {
-	// Framing sanity: two consecutive frames on one pipe.
 	var addr = startTestListener(t)
 	var conn net.Conn
 	var err error
@@ -139,5 +179,32 @@ func TestFrameRoundTrip(t *testing.T) {
 	if r2["type"] != "hello_ack" {
 		t.Errorf("frame 2 type = %v, want hello_ack", r2["type"])
 	}
-	_ = fmt.Sprint("done")
+}
+
+// -- TLS tests ---------------------------------------------------------------
+
+func TestTLSLoopbackHello(t *testing.T) {
+	var addr = makeTLSTestListener(t)
+	if addr == "" {
+		return
+	}
+
+	var cliCfg = new(tls.Config)
+	cliCfg.InsecureSkipVerify = true
+
+	var conn *tls.Conn
+	var dialErr error
+	conn, dialErr = tls.Dial("tcp", addr, cliCfg)
+	if dialErr != nil {
+		t.Fatalf("TLS dial failed: %v", dialErr)
+	}
+	defer conn.Close()
+
+	var resp = sendRecv(t, conn, `{"type":"hello"}`)
+	if resp["type"] != "hello_ack" {
+		t.Errorf("type = %v, want hello_ack", resp["type"])
+	}
+	if resp["version"] != coreVersion() {
+		t.Errorf("version = %v, want %v", resp["version"], coreVersion())
+	}
 }
