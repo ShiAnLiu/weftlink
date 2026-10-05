@@ -4,7 +4,8 @@
 // daemon generates a local self-signed Ed25519 cert under etc/.
 package main
 
-import "crypto/ed25519"
+import "crypto/ecdsa"
+import "crypto/elliptic"
 import "crypto/rand"
 import "crypto/x509"
 import "crypto/x509/pkix"
@@ -21,10 +22,9 @@ func ensureTLSCert(certPath string, keyPath string) error {
 		return nil // already present
 	}
 
-	var pub ed25519.PublicKey
-	var priv ed25519.PrivateKey
+	var priv *ecdsa.PrivateKey
 	var genErr error
-	pub, priv, genErr = ed25519.GenerateKey(rand.Reader)
+	priv, genErr = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if genErr != nil {
 		return genErr
 	}
@@ -44,7 +44,7 @@ func ensureTLSCert(certPath string, keyPath string) error {
 
 	var der []byte
 	var certErr error
-	der, certErr = x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, pub, priv)
+	der, certErr = x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &priv.PublicKey, priv)
 	if certErr != nil {
 		return certErr
 	}
