@@ -1,8 +1,9 @@
 // Core: version, constants, shared types
 package main
 
+// coreVersion is the Weftlink product version (not the protocol version).
 func coreVersion() string {
-	return "0.1.0"
+	return "0.2.1"
 }
 
 const (
