@@ -28,8 +28,6 @@ Thumbs.db
 knots/
 weftlink.db
 
-# Gen consistency — CI regenerates
-gen/go/
-gen/dart/
-gen/arkts/*.exe
+# Gen — products are committed and CI-verified (tools/gen)
+# (no ignore here; see docs/decisions on single-source schema)
 bin/

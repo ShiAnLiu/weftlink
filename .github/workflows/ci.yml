@@ -96,3 +96,8 @@ jobs:
           echo "Validating protocol schema..."
           test -f protocol/schema/weftlink.yaml && echo "schema file exists: OK"
           test -f protocol/conformance/hello.json && echo "conformance file exists: OK"
+
+      - name: Verify gen/ matches schema
+        run: |
+          go run ./tools/gen -check
+          echo "gen/ is in sync with protocol/schema/weftlink.yaml"
