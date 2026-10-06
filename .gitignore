@@ -31,3 +31,9 @@ weftlink.db
 # Gen — products are committed and CI-verified (tools/gen)
 # (no ignore here; see docs/decisions on single-source schema)
 bin/
+
+# Flutter app: commit lockfile for reproducibility
+!clients/flutter/app/pubspec.lock
+
+# IDE
+*.iml
