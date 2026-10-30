@@ -18,6 +18,11 @@ class GomobileCoreClient extends CoreClient {
   }
 
   @override
+  Future<int> ping() async {
+    throw UnimplementedError();
+  }
+
+  @override
   Stream<List<Peer>> watchPeers() {
     throw UnimplementedError();
   }
