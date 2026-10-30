@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.3.0] — 2026-10-30
+
+### Added
+- **`weftlink` CLI** (`cli/`): `up`, `status`, `ls`, `ping`, `knot`, `version`,
+  `help`; stdlib `flag`, `--host` / `--port` / `--json`, flags may appear before
+  or after positional arguments.
+- **LAN discovery**: 3-second UDP beacons (multicast `224.0.0.167` plus
+  limited broadcast fallback) advertising public node metadata; unpaired peers
+  expire after 12 seconds.
+- **Knot pairing**: one-time 6-character code (2-minute TTL, 5 failures),
+  `pair_request` / `pair_confirm` over TLS, Ed25519 fingerprint/public-key
+  consistency checks, knots persisted to `~/.weftlink/knots/`.
+- **Stable node identity**: Ed25519 key persisted to `~/.weftlink/node.key`;
+  node id and fingerprint are derived instead of hardcoded.
+- Daemon control verbs `peers`, `knot_init`, `knot_join`; `status` now returns
+  the full peer list and counts.
+- `WEFTLINK_HOME`, `WEFTLINK_NAME`, `WEFTLINK_PORT`, `WEFTLINK_BEACON_PORT`
+  overrides for isolated/multi-instance runs.
+
+### Changed
+- **CI**: explicit `permissions`, concurrency cancellation, Go module read-only
+  mode, `-count=1`, and a Linux `-race` run; gofmt gate now covers the whole
+  tree (including generated Go).
+- **CI**: daemon-dependent jobs wait for `127.0.0.1:7801` readiness and fail
+  instead of silently skipping Dart/Flutter tests
+  (`WEFTLINK_REQUIRE_DAEMON=1`).
+- **CI**: schema job validates conformance vectors as JSON; new CLI
+  build/smoke job.
+- **CD**: release is gated on vet/test/gen; builds `weftlinkd` and `weftlink`
+  for linux/darwin/windows on amd64 and arm64; publishes `SHA256SUMS`; injects
+  the tag version via `-X main.productVersion` / `-X main.version`.
+- TLS cert/key now live in `~/.weftlink/tls/` instead of the working directory.
+
 ## [0.2.0] — 2026-10-06
 
 ### Added

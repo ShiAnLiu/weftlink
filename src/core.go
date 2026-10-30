@@ -1,9 +1,17 @@
 // Core: version, constants, shared types
 package main
 
-// coreVersion is the Weftlink product version (not the protocol version).
+import "strconv"
+import "os"
+
+// productVersion is the Weftlink product version (not the protocol version).
+// Release builds override it with:
+//
+//	-ldflags "-X main.productVersion=<tag without v>"
+var productVersion = "0.3.0"
+
 func coreVersion() string {
-	return "0.2.1"
+	return productVersion
 }
 
 const (
@@ -12,6 +20,25 @@ const (
 	pairCodeLen     = 6
 	beaconPort      = 7802
 )
+
+// Ports are overridable so two daemons can run on one machine for development
+// and pairing tests.
+var (
+	listenPort    = envPort("WEFTLINK_PORT", defaultPort)
+	discoveryPort = envPort("WEFTLINK_BEACON_PORT", beaconPort)
+)
+
+func envPort(key string, def int) int {
+	var raw = os.Getenv(key)
+	if raw == "" {
+		return def
+	}
+	var n, err = strconv.Atoi(raw)
+	if err != nil || n <= 0 || n > 65535 {
+		return def
+	}
+	return n
+}
 
 type NodeRole int
 
@@ -32,13 +59,4 @@ type NodeInfo struct {
 	role        NodeRole
 	version     string
 	addresses   []NodeAddr
-}
-
-type Peer struct {
-	peerID   string
-	name     string
-	role     NodeRole
-	isWarped bool
-	isWefted bool
-	lastSeen int64
 }

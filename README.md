@@ -9,7 +9,31 @@ LAN direct connect优先, cross-network via shuttle relay as fallback.
 
 ## Quick Start
 
-_TODO: M0 after milestone_
+Build the daemon and CLI:
+
+```sh
+go build -o bin/weftlinkd ./src
+go build -o bin/weftlink ./cli
+```
+
+Use it:
+
+```sh
+./bin/weftlink up                 # start the local daemon (background)
+./bin/weftlink status             # local node id / version / peer counts
+./bin/weftlink ls                 # peers discovered on the LAN
+./bin/weftlink ping               # round-trip time to the local daemon
+./bin/weftlink knot               # print a one-time 6-character pair code
+./bin/weftlink knot ABC123        # pair from the other device
+```
+
+State (node key, TLS cert, paired knots) lives in `~/.weftlink/`; set
+`WEFTLINK_HOME` to isolate it. Default ports: 7801 (Weft Protocol), 7802
+(discovery beacon). Pass `--json` for machine-readable output.
+
+Pairing is mutual: one side runs `weftlink knot` to print a code, the other
+runs `weftlink knot <code>`. The code expires after two minutes and is
+single-use. If discovery is unavailable, pass `--peer <ip[:port]>`.
 
 ## Directory Layout
 

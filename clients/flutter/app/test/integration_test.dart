@@ -32,6 +32,9 @@ void main() {
       up = await _daemonUp();
     });
     if (!up) {
+      if (Platform.environment['WEFTLINK_REQUIRE_DAEMON'] == '1') {
+        fail('weftlinkd not running on 127.0.0.1:7801 (required by CI)');
+      }
       markTestSkipped('weftlinkd not running on 127.0.0.1:7801');
       return;
     }
@@ -44,6 +47,7 @@ void main() {
     });
 
     expect(find.text('Connected'), findsOneWidget);
-    expect(find.text('weftlinkd-windows'), findsOneWidget);
+    expect(find.text('Node ID'), findsOneWidget);
+    expect(find.text('Version'), findsOneWidget);
   });
 }

@@ -25,6 +25,9 @@ void main() {
 
   setUpAll(() async {
     up = await _daemonUp();
+    if (!up && Platform.environment['WEFTLINK_REQUIRE_DAEMON'] == '1') {
+      fail('weftlinkd not running on 127.0.0.1:7801 (required by CI)');
+    }
   });
 
   test('up() returns NodeStatus from daemon', () async {
@@ -35,7 +38,7 @@ void main() {
     final client = LoopbackCoreClient();
     final status = await client.up();
     expect(status.connected, isTrue);
-    expect(status.nodeId, 'weftlinkd-windows');
+    expect(status.nodeId, isNotEmpty);
     expect(status.version, isNotEmpty);
     await client.down();
   });

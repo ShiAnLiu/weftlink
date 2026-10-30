@@ -1,31 +1,23 @@
 name: Release
 
-# CD: on tag push, cross-compile daemon for 3 platforms and attach
-# to a GitHub Release. Advances M0.5 spike item #1 (cross-compile).
+# CD: on tag push, verify, cross-compile weftlinkd for all desktop/server
+# targets, checksum, and attach to a GitHub Release.
 on:
   push:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
-    name: Cross-compile weftlinkd
+  verify:
+    name: Verify
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - goos: windows
-            goarch: amd64
-            ext: .exe
-          - goos: linux
-            goarch: amd64
-            ext: ""
-          - goos: darwin
-            goarch: amd64
-            ext: ""
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -33,32 +25,96 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
-      - name: Build weftlinkd
+      - name: Vet
+        run: go vet ./...
+
+      - name: Check gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "Files not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Test
+        run: go test ./... -count=1
+
+      - name: Verify gen/ matches schema
+        run: go run ./tools/gen -check
+
+  build:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: windows, goarch: amd64, ext: ".exe" }
+          - { goos: windows, goarch: arm64, ext: ".exe" }
+          - { goos: linux, goarch: amd64, ext: "" }
+          - { goos: linux, goarch: arm64, ext: "" }
+          - { goos: darwin, goarch: amd64, ext: "" }
+          - { goos: darwin, goarch: arm64, ext: "" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binaries
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
+          CGO_ENABLED: "0"
+          REF_NAME: ${{ github.ref_name }}
         run: |
+          version="${REF_NAME#v}"
           mkdir -p dist
-          go build -trimpath -ldflags="-s -w" -o "dist/weftlinkd-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}" ./src
+          daemon="dist/weftlinkd-${GOOS}-${GOARCH}${{ matrix.ext }}"
+          cli="dist/weftlink-${GOOS}-${GOARCH}${{ matrix.ext }}"
+          go build -trimpath \
+            -ldflags "-s -w -X main.productVersion=${version}" \
+            -o "$daemon" ./src
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${version}" \
+            -o "$cli" ./cli
+          echo "built $daemon"
+          echo "built $cli"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: weftlinkd-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
+          if-no-files-found: error
 
   release:
     name: Create release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum weftlinkd-* weftlink-* > SHA256SUMS
+          cat SHA256SUMS
 
       - name: List artifacts
         run: ls -la dist/
@@ -69,4 +125,4 @@ jobs:
           files: dist/*
           generate_release_notes: true
           draft: false
-          prerelease: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

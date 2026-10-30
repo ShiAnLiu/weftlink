@@ -97,8 +97,11 @@ func TestLoopbackHello(t *testing.T) {
 	if resp["type"] != "hello_ack" {
 		t.Errorf("type = %v, want hello_ack", resp["type"])
 	}
-	if resp["node_id"] != "weftlinkd-windows" {
-		t.Errorf("node_id = %v, want weftlinkd-windows", resp["node_id"])
+	if resp["node_id"] != localNode.nodeID {
+		t.Errorf("node_id = %v, want %v", resp["node_id"], localNode.nodeID)
+	}
+	if resp["display_name"] != localNode.displayName {
+		t.Errorf("display_name = %v, want %v", resp["display_name"], localNode.displayName)
 	}
 	if resp["role"] != "warp" {
 		t.Errorf("role = %v, want warp", resp["role"])
@@ -118,9 +121,88 @@ func TestLoopbackPingPong(t *testing.T) {
 	}
 	defer conn.Close()
 
-	var resp = sendRecv(t, conn, `{"type":"ping"}`)
+	var resp = sendRecv(t, conn, `{"type":"ping","nonce":"n1","ts":42}`)
 	if resp["type"] != "pong" {
 		t.Errorf("type = %v, want pong", resp["type"])
+	}
+	if resp["nonce"] != "n1" {
+		t.Errorf("nonce = %v, want n1", resp["nonce"])
+	}
+	if ts, ok := resp["ts"].(float64); !ok || int64(ts) != 42 {
+		t.Errorf("ts = %v, want 42", resp["ts"])
+	}
+}
+
+func TestLoopbackPeers(t *testing.T) {
+	resetPeerTable()
+	t.Cleanup(resetPeerTable)
+
+	var addr = startTestListener(t)
+	var conn net.Conn
+	var err error
+	conn, err = net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	var resp = sendRecv(t, conn, `{"type":"peers"}`)
+	if resp["type"] != "peers" {
+		t.Errorf("type = %v, want peers", resp["type"])
+	}
+	if _, ok := resp["peers"].([]any); !ok {
+		t.Errorf("peers not an array: %T", resp["peers"])
+	}
+}
+
+func TestLoopbackKnotInit(t *testing.T) {
+	resetPendingCode()
+	t.Cleanup(resetPendingCode)
+
+	var addr = startTestListener(t)
+	var conn net.Conn
+	var err error
+	conn, err = net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	var resp = sendRecv(t, conn, `{"type":"knot_init"}`)
+	if resp["type"] != "knot_code" {
+		t.Fatalf("type = %v, want knot_code", resp["type"])
+	}
+	var code, _ = resp["code"].(string)
+	if !validPairCode(code) {
+		t.Errorf("invalid pair code %q", code)
+	}
+	if expires, ok := resp["expires_in_seconds"].(float64); !ok || expires <= 0 {
+		t.Errorf("expires_in_seconds = %v, want > 0", resp["expires_in_seconds"])
+	}
+}
+
+func TestLoopbackKnotJoinWithoutPeers(t *testing.T) {
+	resetPeerTable()
+	t.Cleanup(resetPeerTable)
+
+	var addr = startTestListener(t)
+	var conn net.Conn
+	var err error
+	conn, err = net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	var resp = sendRecv(t, conn, `{"type":"knot_join","code":"ABC123"}`)
+	if resp["type"] != "knot_result" {
+		t.Fatalf("type = %v, want knot_result", resp["type"])
+	}
+	if ok, _ := resp["ok"].(bool); ok {
+		t.Error("join without peers must fail")
+	}
+	if msg, _ := resp["error"].(string); msg == "" {
+		t.Error("expected an error message")
 	}
 }
 
@@ -138,11 +220,14 @@ func TestLoopbackStatus(t *testing.T) {
 	if resp["type"] != "status" {
 		t.Errorf("type = %v, want status", resp["type"])
 	}
-	var peers, ok = resp["peers"].(float64)
+	var peers, ok = resp["peers"].([]any)
 	if !ok {
-		t.Fatalf("peers not numeric: %v", resp["peers"])
+		t.Fatalf("peers not an array: %T", resp["peers"])
 	}
 	_ = peers
+	if resp["node_id"] != localNode.nodeID {
+		t.Errorf("node_id = %v, want %v", resp["node_id"], localNode.nodeID)
+	}
 }
 
 func TestLoopbackUnknownType(t *testing.T) {

@@ -15,9 +15,9 @@ ArkTS client for HarmonyOS NEXT (Huawei Mate X7). Talks Weft Protocol over
 
 | Request | Response |
 |---------|----------|
-| `{"type":"hello"}` | `{"type":"hello_ack","node_id":"...","version":"0.1.0","role":"warp"}` |
-| `{"type":"status"}` | `{"type":"status","peers":0,"version":"0.1.0"}` |
-| `{"type":"ping"}` | `{"type":"pong"}` |
+| `{"type":"hello"}` | `{"type":"hello_ack","node_id":"...","display_name":"...","fingerprint":"...","version":"0.2.1","role":"warp"}` |
+| `{"type":"status"}` | `{"type":"status","node_id":"...","version":"0.2.1","role":"warp","peers":[],"peer_count":0,"paired_count":0}` |
+| `{"type":"ping"}` | `{"type":"pong","nonce":"...","ts":0}` |
 
 ## Build & run
 

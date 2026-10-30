@@ -1,12 +1,12 @@
 # Status
 
-Last updated: 2026-10-06
+Last updated: 2026-10-25
 
 | Milestone | Status | Date   |
 |-----------|--------|--------|
 | M0        | 🟢     | 2026-10-02 |
 | M0.5      | 🟢     | 2026-10-06 |
-| M1        | ⚪     | —      |
+| M1        | 🔴     | 2026-10-25 |
 | M2        | ⚪     | —      |
 | M3        | ⚪     | —      |
 | M4        | ⚪     | —      |
@@ -28,9 +28,19 @@ Last updated: 2026-10-06
 |---|------|------|------|
 | ① | Go 交叉编译 + TLS echo 互通 | ✅ | CI Release 三平台二进制；TLS 1.3 握手（openssl/Go/Dart 客户端）；回环集成测试；Wi-Fi IP 直连 |
 | ② | gomobile 安卓真机 | ✅（改道） | Mate X7 为 HarmonyOS NEXT → 走 ArkTS 路线（非 gomobile）。ADR-0001 记录改道理由 |
-| ③ | Flutter 桌面 UI 回环连 daemon | ✅ | `clients/flutter/app`：HomePage 经 LoopbackCoreClient(TLS) 拉到 `weftlinkd-windows` 状态；集成测试通过；`flutter build web` 成功 |
+| ③ | Flutter 桌面 UI 回环连 daemon | ✅ | `clients/flutter/app`：HomePage 经 LoopbackCoreClient(TLS) 拉到本机 daemon 状态（节点 ID 动态）；集成测试通过；`flutter build web` 成功 |
 | ④ | schema → Go/Dart 类型生成 | ✅ | `tools/gen`（stdlib）+ `gen/{go,dart,arkts}`；`-check` 模式接入 CI；Dart 关键字转义 |
 | ⑤ | Windows 输入注入预演 | ⚪ | 未开始（M4 相关） |
+
+## M1 — 局域网互见与配对（CLI，进行中）
+
+- ✅ `weftlink` CLI：`up` / `status` / `ls` / `ping` / `knot` / `version` / `help`；
+  全局 `--host` / `--port` / `--json`，状态目录 `~/.weftlink`（`WEFTLINK_HOME` 可覆盖）。
+- ✅ daemon：稳定 Ed25519 节点身份（`node.key`）、UDP 组播 + 广播 beacon 发现（3s 间隔、12s TTL）、
+  `peers` / `knot_init` / `knot_join` 控制动词；TLS 证书移入状态目录。
+- ✅ 配对：单次 6 位码（2 分钟过期、5 次错误上限），双方校验指纹/公钥一致性，
+  knot 持久化到 `~/.weftlink/knots/`；本地双 daemon（7801/7811）端到端配对已跑通。
+- ⏳ 待办：两台真机同 Wi-Fi 实跑记录（DoD 要求）。
 
 ## 本轮实现要点
 
@@ -47,15 +57,15 @@ Last updated: 2026-10-06
 
 | 套件 | 数量 | 命令 |
 |------|------|------|
-| Go 单元/集成 | 11 | `go test ./...` |
+| Go 单元/集成 | 32 | `go test ./...` |
 | Dart core_client | 2 | `dart test` |
 | Flutter app | 3 | `flutter test` |
 | 生成物一致性 | 3 | `go run ./tools/gen -check` |
 
 ## CI/CD
 
-- **CI**：三平台 Go（build/vet/test/gofmt）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性
-- **CD**：tag `v*` → 交叉编译 `weftlinkd`（windows/linux/darwin amd64）→ GitHub Release
+- **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
+- **CD**：tag `v*` → 先跑 vet/test/gen 门禁 → 交叉编译 `weftlinkd` 与 `weftlink`（windows/linux/darwin × amd64/arm64）→ SHA256SUMS → GitHub Release；tag 版本号通过 `-X main.productVersion` / `-X main.version` 注入
 - 已发布：v0.1.0、v0.2.0
 
 ## 经验记录（踩坑）

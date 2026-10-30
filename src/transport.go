@@ -2,21 +2,22 @@
 package main
 
 import "crypto/tls"
-import "encoding/binary"
 import "encoding/json"
 import "fmt"
 import "io"
 import "log"
 import "net"
+import "path/filepath"
+import "time"
 
-const maxFrameSize = 1 << 20 // 1 MiB
+import "weftlink/internal/proto"
 
 // -- TLS config -------------------------------------------------------------
 
 // loadTLSConfig loads (or generates) the self-signed server cert.
 func loadTLSConfig(cfg **tls.Config) error {
-	var certPath = "etc/weftlinkd-cert.pem"
-	var keyPath = "etc/weftlinkd-key.pem"
+	var certPath = filepath.Join(tlsDir(), "weftlinkd-cert.pem")
+	var keyPath = filepath.Join(tlsDir(), "weftlinkd-key.pem")
 	var genErr error
 	genErr = ensureTLSCert(certPath, keyPath)
 	if genErr != nil {
@@ -114,7 +115,7 @@ func handleConn(conn net.Conn) {
 			return
 		}
 		var resp []byte
-		resp, err = handleRequest(payload)
+		resp, err = handleRequest(conn.RemoteAddr(), payload)
 		if err != nil {
 			log.Println("handle error:", err)
 			return
@@ -130,12 +131,79 @@ func handleConn(conn net.Conn) {
 
 // -- Request dispatch --------------------------------------------------------
 
-type wireMsg struct {
-	Type string `json:"type"`
+// request is the union of all daemon control verbs. Keeping one struct keeps
+// the dispatcher small; unknown fields are ignored by encoding/json.
+type request struct {
+	Type  string       `json:"type"`
+	Code  string       `json:"code"`
+	Host  string       `json:"host"`
+	Nonce string       `json:"nonce"`
+	TS    int64        `json:"ts"`
+	Node  pairNodeWire `json:"node"`
 }
 
-func handleRequest(payload []byte) ([]byte, error) {
-	var req wireMsg
+type helloAck struct {
+	Type        string `json:"type"`
+	NodeID      string `json:"node_id"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+	Version     string `json:"version"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+type statusResponse struct {
+	Type        string `json:"type"`
+	NodeID      string `json:"node_id"`
+	DisplayName string `json:"display_name"`
+	Role        string `json:"role"`
+	Version     string `json:"version"`
+	Fingerprint string `json:"fingerprint"`
+	Peers       []Peer `json:"peers"`
+	PeerCount   int    `json:"peer_count"`
+	PairedCount int    `json:"paired_count"`
+}
+
+type peersResponse struct {
+	Type  string `json:"type"`
+	Peers []Peer `json:"peers"`
+}
+
+type pongResponse struct {
+	Type  string `json:"type"`
+	Nonce string `json:"nonce,omitempty"`
+	TS    int64  `json:"ts,omitempty"`
+}
+
+type knotCodeResponse struct {
+	Type             string `json:"type"`
+	Code             string `json:"code"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
+}
+
+type knotResultResponse struct {
+	Type  string `json:"type"`
+	OK    bool   `json:"ok"`
+	Peer  *Peer  `json:"peer,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+type pairConfirmResponse struct {
+	Type string       `json:"type"`
+	Node pairNodeWire `json:"node"`
+}
+
+type pairDeniedResponse struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
+type errorResponse struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
+func handleRequest(remote net.Addr, payload []byte) ([]byte, error) {
+	var req request
 	var err error
 	err = json.Unmarshal(payload, &req)
 	if err != nil {
@@ -144,27 +212,63 @@ func handleRequest(payload []byte) ([]byte, error) {
 	var resp any
 	switch req.Type {
 	case "hello":
-		resp = map[string]any{
-			"type":    "hello_ack",
-			"node_id": "weftlinkd-windows",
-			"version": coreVersion(),
-			"role":    "warp",
+		resp = helloAck{
+			Type:        "hello_ack",
+			NodeID:      localNode.nodeID,
+			DisplayName: localNode.displayName,
+			Role:        "warp",
+			Version:     localNode.version,
+			Fingerprint: localNode.fingerprint,
 		}
 	case "status":
-		resp = map[string]any{
-			"type":    "status",
-			"peers":   peerCount(),
-			"version": coreVersion(),
+		var peers = listPeers()
+		resp = statusResponse{
+			Type:        "status",
+			NodeID:      localNode.nodeID,
+			DisplayName: localNode.displayName,
+			Role:        "warp",
+			Version:     localNode.version,
+			Fingerprint: localNode.fingerprint,
+			Peers:       peers,
+			PeerCount:   len(peers),
+			PairedCount: pairedPeerCount(),
 		}
+	case "peers":
+		resp = peersResponse{Type: "peers", Peers: listPeers()}
 	case "ping":
-		resp = map[string]any{
-			"type": "pong",
+		resp = pongResponse{Type: "pong", Nonce: req.Nonce, TS: req.TS}
+	case "knot_init":
+		var code string
+		var until time.Time
+		code, until, err = startPairCode()
+		if err != nil {
+			resp = errorResponse{Type: "error", Message: "cannot generate pair code: " + err.Error()}
+			break
 		}
+		resp = knotCodeResponse{
+			Type:             "knot_code",
+			Code:             code,
+			ExpiresInSeconds: int(time.Until(until).Seconds()),
+		}
+	case "knot_join":
+		var k Knot
+		k, err = joinKnot(req.Code, req.Host)
+		if err != nil {
+			resp = knotResultResponse{Type: "knot_result", OK: false, Error: err.Error()}
+			break
+		}
+		var p = knotToPeer(k)
+		resp = knotResultResponse{Type: "knot_result", OK: true, Peer: &p}
+	case "pair_request":
+		var node pairNodeWire
+		node, err = handlePairRequest(req.Code, req.Node, hostFromAddr(remote))
+		if err != nil {
+			resp = pairDeniedResponse{Type: "pair_denied", Message: err.Error()}
+			break
+		}
+		resp = pairConfirmResponse{Type: "pair_confirm", Node: node}
 	default:
-		resp = map[string]any{
-			"type":    "error",
-			"message": "unknown type: " + req.Type,
-		}
+		resp = errorResponse{Type: "error", Message: "unknown type: " + req.Type}
 	}
 	var data []byte
 	data, err = json.Marshal(resp)
@@ -174,43 +278,25 @@ func handleRequest(payload []byte) ([]byte, error) {
 	return data, nil
 }
 
+func hostFromAddr(addr net.Addr) string {
+	if addr == nil {
+		return ""
+	}
+	var host, _, err = net.SplitHostPort(addr.String())
+	if err != nil {
+		return addr.String()
+	}
+	return host
+}
+
 // -- Frame I/O (per SPEC.md: [4-byte BE length][JSON payload]) ---------------
 
 func readFrame(conn net.Conn) ([]byte, error) {
-	var lenBuf [4]byte
-	var n int
-	var err error
-	n, err = io.ReadFull(conn, lenBuf[:])
-	if err != nil {
-		return nil, err
-	}
-	_ = n
-	var length = binary.BigEndian.Uint32(lenBuf[:])
-	if length > maxFrameSize {
-		return nil, fmt.Errorf("frame too large: %d", length)
-	}
-	var buf = make([]byte, length)
-	n, err = io.ReadFull(conn, buf)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
+	var payload []byte
+	var err = proto.ReadFrame(conn, &payload)
+	return payload, err
 }
 
 func writeFrame(conn net.Conn, data []byte) error {
-	var lenBuf [4]byte
-	binary.BigEndian.PutUint32(lenBuf[:], uint32(len(data)))
-	var n int
-	var err error
-	n, err = conn.Write(lenBuf[:])
-	if err != nil {
-		return err
-	}
-	_ = n
-	n, err = conn.Write(data)
-	if err != nil {
-		return err
-	}
-	_ = n
-	return nil
+	return proto.WriteFrame(conn, data)
 }

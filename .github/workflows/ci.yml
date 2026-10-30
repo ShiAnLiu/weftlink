@@ -5,15 +5,27 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOFLAGS: -mod=readonly
 
 jobs:
-  test:
-    name: Build & Test (${{ matrix.os }})
+  go:
+    name: Go (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -21,19 +33,29 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
-      - name: Build
+      # `go build ./...` collides with the src/ and gen/ directory names on
+      # Linux/macOS, so always build to an explicit output path.
+      - name: Build binaries
         run: |
-          mkdir -p bin
-          go build -o bin/weftlinkd ./src
+          go build -trimpath -o "${{ runner.temp }}/weftlinkd" ./src
+          go build -trimpath -o "${{ runner.temp }}/weftlink" ./cli
+
+      - name: Verify gen/ matches schema
+        run: go run ./tools/gen -check
 
       - name: Vet
         run: go vet ./...
 
       - name: Test
-        run: go test ./... -v
+        run: go test ./... -count=1
 
-      - name: Check gofmt (Linux only)
+      - name: Test (race)
+        if: matrix.os == 'ubuntu-latest'
+        run: go test -race ./... -count=1
+
+      - name: Check gofmt
         if: matrix.os == 'ubuntu-latest'
         run: |
           unformatted=$(gofmt -l .)
@@ -43,9 +65,12 @@ jobs:
             exit 1
           fi
 
-  dart:
-    name: Dart client (analyze + test)
+  cli:
+    name: CLI (build + smoke)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WEFTLINK_HOME: ${{ runner.temp }}/weftlink-home
     steps:
       - uses: actions/checkout@v4
 
@@ -53,36 +78,81 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
-      - name: Build daemon
+      - name: Build
         run: |
           mkdir -p bin
-          go build -o bin/weftlinkd ./src
+          go build -trimpath -o bin/weftlinkd ./src
+          go build -trimpath -o bin/weftlink ./cli
 
-      - name: Start daemon (background)
+      - name: Smoke test
         run: |
-          ./bin/weftlinkd > /tmp/weftlinkd.log 2>&1 &
-          sleep 2
-          cat /tmp/weftlinkd.log
+          ./bin/weftlink help > /dev/null
+          ./bin/weftlink version
+          ./bin/weftlink up
+          ./bin/weftlink status
+          ./bin/weftlink ping --count 2
+          ./bin/weftlink ls
+          ./bin/weftlink knot
+          ./bin/weftlink status --json | python3 -m json.tool > /dev/null
+          ./bin/weftlink ping --count 2 --json | python3 -m json.tool > /dev/null
+          ./bin/weftlink ls --json | python3 -m json.tool > /dev/null
+
+  dart:
+    name: Dart core_client (analyze + test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      WEFTLINK_REQUIRE_DAEMON: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
 
-      - name: Dart pub get
-        working-directory: clients/flutter/packages/core_client
-        run: dart pub get
+      - name: Build + start daemon
+        run: |
+          mkdir -p bin
+          go build -trimpath -o bin/weftlinkd ./src
+          ./bin/weftlinkd > /tmp/weftlinkd.log 2>&1 &
+          echo $! > /tmp/weftlinkd.pid
+          for i in $(seq 1 30); do
+            if ! kill -0 "$(cat /tmp/weftlinkd.pid)" 2>/dev/null; then
+              echo "daemon exited during startup:"
+              cat /tmp/weftlinkd.log
+              exit 1
+            fi
+            if timeout 1 bash -c '</dev/tcp/127.0.0.1/7801' 2>/dev/null; then
+              echo "daemon ready"
+              cat /tmp/weftlinkd.log
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "daemon not reachable on 127.0.0.1:7801:"
+          cat /tmp/weftlinkd.log
+          exit 1
 
-      - name: Dart analyze
+      - name: pub get / analyze / test
         working-directory: clients/flutter/packages/core_client
-        run: dart analyze
-
-      - name: Dart test
-        working-directory: clients/flutter/packages/core_client
-        run: dart test
+        run: |
+          dart pub get
+          dart analyze
+          dart test
 
   flutter:
-    name: Flutter (analyze + test)
+    name: Flutter app (analyze + test)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      WEFTLINK_REQUIRE_DAEMON: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -91,19 +161,36 @@ jobs:
         with:
           flutter-version: '3.47.6'
           channel: stable
+          cache: true
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
       - name: Build + start daemon
         run: |
           mkdir -p bin
-          go build -o bin/weftlinkd ./src
+          go build -trimpath -o bin/weftlinkd ./src
           ./bin/weftlinkd > /tmp/weftlinkd.log 2>&1 &
-          sleep 2
-          tail -3 /tmp/weftlinkd.log
+          echo $! > /tmp/weftlinkd.pid
+          for i in $(seq 1 30); do
+            if ! kill -0 "$(cat /tmp/weftlinkd.pid)" 2>/dev/null; then
+              echo "daemon exited during startup:"
+              cat /tmp/weftlinkd.log
+              exit 1
+            fi
+            if timeout 1 bash -c '</dev/tcp/127.0.0.1/7801' 2>/dev/null; then
+              echo "daemon ready"
+              cat /tmp/weftlinkd.log
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "daemon not reachable on 127.0.0.1:7801:"
+          cat /tmp/weftlinkd.log
+          exit 1
 
       - name: core_client — pub get / analyze / test
         working-directory: clients/flutter/packages/core_client
@@ -120,8 +207,9 @@ jobs:
           flutter test
 
   schema:
-    name: Schema consistency
+    name: Schema + generated types
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -129,14 +217,35 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
-      - name: Validate schema files parse
+      - name: Schema and conformance files present
         run: |
-          echo "Validating protocol schema..."
-          test -f protocol/schema/weftlink.yaml && echo "schema file exists: OK"
-          test -f protocol/conformance/hello.json && echo "conformance file exists: OK"
+          test -f protocol/schema/weftlink.yaml
+          test -f protocol/conformance/hello.json
+          echo "schema + conformance files: OK"
+
+      - name: Validate conformance vectors are JSON
+        run: |
+          shopt -s nullglob
+          files=(protocol/conformance/*.json)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no conformance vectors found"
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            python3 -m json.tool "$f" > /dev/null
+            echo "ok: $f"
+          done
 
       - name: Verify gen/ matches schema
+        run: go run ./tools/gen -check
+
+      - name: Verify generated Go is gofmt-clean
         run: |
-          go run ./tools/gen -check
-          echo "gen/ is in sync with protocol/schema/weftlink.yaml"
+          unformatted=$(gofmt -l gen/go)
+          if [ -n "$unformatted" ]; then
+            echo "Generated files not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
