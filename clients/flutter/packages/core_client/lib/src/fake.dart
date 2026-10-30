@@ -33,6 +33,12 @@ class FakeCoreClient implements CoreClient {
 
   bool get isConnected => _connected;
 
+  /// Canned latency reported by [ping].
+  int pingLatencyMs = 5;
+
+  @override
+  Future<int> ping() async => pingLatencyMs;
+
   @override
   Stream<List<Peer>> watchPeers() => _peers.stream;
 

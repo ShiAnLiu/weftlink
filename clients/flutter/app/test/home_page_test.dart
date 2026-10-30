@@ -6,10 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:weftlink_app/home_page.dart';
 
+Widget _wrap(FakeCoreClient fake) => MaterialApp(
+      home: HomePage(
+        factory: (host, port) => fake,
+        initialHost: 'fake',
+        initialPort: 1,
+      ),
+    );
+
 void main() {
   testWidgets('shows connected status from core', (tester) async {
     final fake = FakeCoreClient();
-    await tester.pumpWidget(MaterialApp(home: HomePage(client: fake)));
+    await tester.pumpWidget(_wrap(fake));
     await tester.pumpAndSettle();
 
     expect(find.text('Connected'), findsOneWidget);
@@ -19,7 +27,7 @@ void main() {
 
   testWidgets('lists peers after knot', (tester) async {
     final fake = FakeCoreClient();
-    await tester.pumpWidget(MaterialApp(home: HomePage(client: fake)));
+    await tester.pumpWidget(_wrap(fake));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('No peers woven in'), findsOneWidget);
@@ -29,5 +37,17 @@ void main() {
 
     expect(find.text('fake-ABC123'), findsOneWidget);
     expect(find.textContaining('Peers (1)'), findsOneWidget);
+  });
+
+  testWidgets('ping shows latency', (tester) async {
+    final fake = FakeCoreClient()..pingLatencyMs = 7;
+    await tester.pumpWidget(_wrap(fake));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Ping'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ping · 7ms'), findsOneWidget);
+    expect(find.textContaining('ping 7ms'), findsOneWidget);
   });
 }

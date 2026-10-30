@@ -64,6 +64,17 @@ class LoopbackCoreClient implements CoreClient {
     _socket = null;
   }
 
+  @override
+  Future<int> ping() async {
+    final sw = Stopwatch()..start();
+    final resp = await _roundTrip({'type': 'ping'});
+    sw.stop();
+    if (resp['type'] != 'pong') {
+      throw StateError('unexpected ping reply: ${resp['type']}');
+    }
+    return sw.elapsedMilliseconds;
+  }
+
   // -- Weft Protocol round trip ----------------------------------------------
 
   Future<Map<String, dynamic>> _roundTrip(Map<String, dynamic> req) {

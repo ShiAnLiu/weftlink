@@ -11,6 +11,9 @@ abstract class CoreClient {
   /// Shut down core connection.
   Future<void> down();
 
+  /// Round-trip latency in milliseconds (Weft `Ping` verb).
+  Future<int> ping();
+
   /// Stream of peers currently woven in (warp/weft annotated).
   Stream<List<Peer>> watchPeers();
 
