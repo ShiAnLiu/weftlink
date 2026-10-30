@@ -512,6 +512,11 @@ func main() {
 		if check {
 			var existing []byte
 			existing, err = os.ReadFile(path)
+			// Checkouts on Windows may have CRLF (core.autocrlf). Compare
+			// logical line endings so -check is platform independent.
+			if err == nil {
+				existing = []byte(strings.ReplaceAll(string(existing), "\r\n", "\n"))
+			}
 			if err != nil || string(existing) != content {
 				fmt.Println("STALE:", path, "(run: go run ./tools/gen)")
 				failed = true
