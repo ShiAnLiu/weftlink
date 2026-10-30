@@ -66,7 +66,7 @@ Last updated: 2026-10-25
 
 - **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
 - **CD**：tag `v*` → 先跑 vet/test/gen 门禁 → 交叉编译 `weftlinkd` 与 `weftlink`（windows/linux/darwin × amd64/arm64）→ SHA256SUMS → GitHub Release；tag 版本号通过 `-X main.productVersion` / `-X main.version` 注入
-- 已发布：v0.1.0、v0.2.0
+- 已发布：v0.1.0、v0.2.0、v0.3.0（CLI + 发现/配对；CI #18 全绿）
 
 ## 经验记录（踩坑）
 
