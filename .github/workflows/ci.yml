@@ -69,8 +69,6 @@ jobs:
     name: CLI (build + smoke)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    env:
-      WEFTLINK_HOME: ${{ runner.temp }}/weftlink-home
     steps:
       - uses: actions/checkout@v4
 
@@ -87,6 +85,8 @@ jobs:
           go build -trimpath -o bin/weftlink ./cli
 
       - name: Smoke test
+        env:
+          WEFTLINK_HOME: ${{ runner.temp }}/weftlink-home
         run: |
           ./bin/weftlink help > /dev/null
           ./bin/weftlink version
