@@ -1,12 +1,12 @@
 # Status
 
-Last updated: 2026-10-25
+Last updated: 2026-10-31
 
 | Milestone | Status | Date   |
 |-----------|--------|--------|
 | M0        | 🟢     | 2026-10-02 |
 | M0.5      | 🟢     | 2026-10-06 |
-| M1        | 🔴     | 2026-10-25 |
+| M1        | 🟢     | 2026-10-31 |
 | M2        | ⚪     | —      |
 | M3        | ⚪     | —      |
 | M4        | ⚪     | —      |
@@ -32,7 +32,7 @@ Last updated: 2026-10-25
 | ④ | schema → Go/Dart 类型生成 | ✅ | `tools/gen`（stdlib）+ `gen/{go,dart,arkts}`；`-check` 模式接入 CI；Dart 关键字转义 |
 | ⑤ | Windows 输入注入预演 | ⚪ | 未开始（M4 相关） |
 
-## M1 — 局域网互见与配对（CLI，进行中）
+## M1 — 局域网互见与配对（CLI，完成）
 
 - ✅ `weftlink` CLI：`up` / `status` / `ls` / `ping` / `knot` / `version` / `help`；
   全局 `--host` / `--port` / `--json`，状态目录 `~/.weftlink`（`WEFTLINK_HOME` 可覆盖）。
@@ -40,7 +40,12 @@ Last updated: 2026-10-25
   `peers` / `knot_init` / `knot_join` 控制动词；TLS 证书移入状态目录。
 - ✅ 配对：单次 6 位码（2 分钟过期、5 次错误上限），双方校验指纹/公钥一致性，
   knot 持久化到 `~/.weftlink/knots/`；本地双 daemon（7801/7811）端到端配对已跑通。
-- ⏳ 待办：两台真机同 Wi-Fi 实跑记录（DoD 要求）。
+- ✅ **真机验证（2026-10-31）**：DESKTOP-JSRV3V1 (192.168.3.107) ↔ DESKTOP-HF8BFLA
+  (192.168.3.140)，两台 Windows 同 Wi-Fi；放行防火墙 TCP 7801 / UDP 7802 后
+  `ls` 互见，`knot` 配对成功，两端 `ls` 均显示 `*`。
+- ⚠️ 已知边界：`ping` 目前只测本机 daemon RTT；节点间 ping 归入 M2。
+- ⚠️ 防火墙坑：Windows Wi-Fi 常被标为 **公用网络**，规则必须 `-Profile Any`
+  （或把网络改成专用）；否则 UDP 发现被拦，`ls` 为空，可用 `--peer` 兜底。
 
 ## 本轮实现要点
 
@@ -66,7 +71,7 @@ Last updated: 2026-10-25
 
 - **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
 - **CD**：tag `v*` → 先跑 vet/test/gen 门禁 → 交叉编译 `weftlinkd` 与 `weftlink`（windows/linux/darwin × amd64/arm64）→ SHA256SUMS → GitHub Release；tag 版本号通过 `-X main.productVersion` / `-X main.version` 注入
-- 已发布：v0.1.0、v0.2.0、v0.3.0（CLI + 发现/配对；CI #18 全绿）
+- 已发布：v0.1.0、v0.2.0、v0.3.0、v0.4.0（CLI + 发现/配对 + 桌面 UI + 开箱即用压缩包）
 
 ## 经验记录（踩坑）
 
@@ -79,4 +84,8 @@ Last updated: 2026-10-25
   Linux/macOS 报错。CI 统一用 `-o bin/...`。
 - **Flutter widget 测试中的真实 I/O**：必须包在 `tester.runAsync()` 内；
   有无限动画（进度条）时不要 `pumpAndSettle`。
+- **Windows 防火墙 / 公用网络**：两台真机首次联调时 `ls` 一直为空，原因是 Wi-Fi
+  被标记为“公用网络”，而示例规则只放行了 Private。→ 防火墙规则统一用
+  `-Profile Any`（TCP 7801、UDP 7802），或把网络改成专用；发现仍失败时用
+  `knot ... --peer <ip>:7801` 绕过 UDP 发现直接配对。
 - **SSH 22 端口被断**：改用 `ssh.github.com:443`（`~/.ssh/config`）。

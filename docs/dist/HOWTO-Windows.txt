@@ -3,10 +3,11 @@ Weftlink - Windows 使用与双机测试
 准备
 ----
 1. 两台 Windows 都解压本压缩包，保持 weftlink.exe 和 weftlinkd.exe 在同一目录。
-2. 两台机器连同一个 Wi-Fi / 局域网，网络配置为“专用网络”。
+2. 两台机器连同一个 Wi-Fi / 局域网。Windows 把 Wi-Fi 标成“公用”也能用，
+   但下面的防火墙规则必须用 `-Profile Any`（`Private` 规则在公用网络不生效）。
 3. 首次启动时允许防火墙访问；若没有弹窗，用管理员 PowerShell 放行：
-   New-NetFirewallRule -DisplayName "Weftlink" -Direction Inbound -Program "<目录>\weftlinkd.exe" -Protocol TCP -LocalPort 7801 -Action Allow -Profile Private
-   New-NetFirewallRule -DisplayName "Weftlink LAN" -Direction Inbound -Program "<目录>\weftlinkd.exe" -Protocol UDP -LocalPort 7802 -Action Allow -Profile Private
+   New-NetFirewallRule -DisplayName "Weftlink" -Direction Inbound -Program "<目录>\weftlinkd.exe" -Protocol TCP -LocalPort 7801 -Action Allow -Profile Any
+   New-NetFirewallRule -DisplayName "Weftlink LAN" -Direction Inbound -Program "<目录>\weftlinkd.exe" -Protocol UDP -LocalPort 7802 -Action Allow -Profile Any
 
 启动（两台都做）
 ----------------
@@ -34,7 +35,11 @@ Weftlink - Windows 使用与双机测试
 - 状态目录: %USERPROFILE%\.weftlink
 - daemon 日志: %USERPROFILE%\.weftlink\weftlinkd.log
 - 停止 daemon: Stop-Process -Name weftlinkd
-- `ls` 看不到对方：检查防火墙 / 是否同一网段；或用 `knot ... --peer <IP>:7801`。
+- `ls` 看不到对方：
+  1) 确认对方 daemon 已启动（`status` 能连上本机 7801）；
+  2) 防火墙 TCP 7801 / UDP 7802 是否按 `-Profile Any` 放行（公用网络常见坑）；
+  3) 是否同一网段 / Wi-Fi 是否开了 AP 隔离；
+  4) 必要时直接用 `knot ... --peer <对方IP>:7801` 配对（绕过 UDP 发现）。
 - `up` 报找不到 weftlinkd：确认两个 exe 在同一目录且文件名正确。
 
 常用命令
