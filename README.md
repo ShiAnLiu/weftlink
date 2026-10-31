@@ -25,7 +25,14 @@ Use it:
 ./bin/weftlink ping               # round-trip time to the local daemon
 ./bin/weftlink knot               # print a one-time 6-character pair code
 ./bin/weftlink knot ABC123        # pair from the other device
+./bin/weftlink status <peer>      # paired peer's status
+./bin/weftlink recv --from <peer> # receiver opts in to one incoming file
+./bin/weftlink send <peer> file   # sender transfers to that peer
 ```
+
+File transfer requires the receiver to run `weftlink recv` first; nothing is
+downloaded automatically. Received files land in `~/Downloads/Weftlink` unless
+`--dir` is given.
 
 State (node key, TLS cert, paired knots) lives in `~/.weftlink/`; set
 `WEFTLINK_HOME` to isolate it. Default ports: 7801 (Weft Protocol), 7802

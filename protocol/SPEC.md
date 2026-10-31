@@ -44,6 +44,11 @@ from the node-to-node message types above.
 | `{"type":"ping"}`          | `pong`: echoes `nonce`, `ts`                               |
 | `{"type":"knot_init"}`     | `knot_code`: `code`, `expires_in_seconds`                  |
 | `{"type":"knot_join","code":"...","host":"..."}` | `knot_result`: `ok`, `peer`, `error` |
+| `{"type":"peer_status","peer":"..."}` | `peer_status`: `ok`, remote `status`, `error` |
+| `{"type":"send_file","peer":"...","path":"..."}` | `send_result`: `ok`, `checksum`, `size`, `error` |
+| `{"type":"recv_begin","dir":"...","from":"...","timeout_seconds":300}` | `recv_begin`: `ok`, `dir`, `timeout_seconds`, `error` |
+| `{"type":"recv_wait","timeout_seconds":300}` | `recv_result`: `ok`, `path`, `name`, `size`, `checksum`, `from_node_id`, `error` |
+| `{"type":"recv_cancel"}`   | `recv_cancelled`                                            |
 
 A `Peer` has: `peer_id`, `display_name`, `role`, `version`, `address`,
 `fingerprint`, `last_seen` (unix ms), `paired`.
@@ -68,13 +73,46 @@ A `Peer` has: `peer_id`, `display_name`, `role`, `version`, `address`,
    `~/.weftlink/knots/<peer_id>.json`. Pairing is mutual: generating the code
    confirms the waiting node, entering it confirms the joining node.
 
+## File Transfer (M2)
+
+A receiver must explicitly open a one-file receive window first:
+
+```sh
+weftlink recv --dir ~/Downloads/Weftlink --from <peer> --timeout 300
+```
+
+The sender then targets the peer by node id or display name:
+
+```sh
+weftlink send <peer> /path/to/file
+```
+
+Flow (all on one TLS connection, pairs only):
+
+1. Sender dials the peer's Weft port and sends `FileOffer` (file id, name,
+   size, mime, SHA-256, sender node id + fingerprint).
+2. Receiver verifies the sender is a paired knot and a receive window is
+   active, then replies `FileAccept`. Otherwise it replies with
+   `accept:false` and a reason; nothing is downloaded automatically.
+3. Sender streams 64 KiB `FileChunk` frames with monotonically increasing
+   offsets, ending with an empty `final:true` chunk.
+4. Receiver writes to a `.part` file, checks size and SHA-256, then renames
+   it into place (sanitized file name, unique path) and replies `FileDone`.
+5. The `weftlink send` call returns the checksum; `weftlink recv` prints the
+   saved path.
+
+Remote status uses the control verb `peer_status` (paired peers only) and
+returns the remote daemon's normal `status` payload.
+
 ## LAN Discovery
 
-Daemons emit a JSON beacon every 3 seconds over UDP 7802 (multicast group
-`224.0.0.167`, plus limited broadcast as a fallback). Beacons carry only
-public metadata (`node_id`, `display_name`, `role`, `version`, `fingerprint`,
-`port`); no secrets. Unpaired peers expire after 12 seconds; paired knots are
-kept.
+Daemons emit a JSON beacon every 3 seconds over UDP 7802 from the same socket
+that receives beacons (source port 7802): multicast group `224.0.0.167`,
+limited broadcast, each interface's directed broadcast, and unicast to known
+peers. Beacons carry only public metadata (`node_id`, `display_name`, `role`,
+`version`, `fingerprint`, `port`); no secrets. `status` reports the discovery
+port, listener state, and beacon sent/received counters. Unpaired peers expire
+after 12 seconds; paired knots are kept.
 
 
 ## Schema

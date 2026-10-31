@@ -2,7 +2,7 @@
 # Canonical source of truth. All gen/ code derived from this.
 
 ---
-version: "0.1.0"
+version: "0.2.0"
 types:
   NodeAddress:
     description: "Network address of a weftlink node"
@@ -62,7 +62,16 @@ messages:
       name:     { type: string, required: true }
       size:     { type: uint64, required: true }
       mime:     { type: string, required: false }
-      checksum: { type: string, required: false, description: "SHA-256 hex" }
+      checksum: { type: string, required: true, description: "SHA-256 hex" }
+      from_node_id:     { type: string, required: true }
+      from_fingerprint: { type: string, required: true, description: "Ed25519 public key hex" }
+
+  FileAccept:
+    description: "Receiver's answer to a file offer"
+    fields:
+      file_id: { type: string, required: true }
+      accept:  { type: bool, required: true }
+      error:   { type: string, required: false }
 
   FileChunk:
     description: "File data chunk"
@@ -71,6 +80,13 @@ messages:
       offset:  { type: uint64, required: true }
       data:    { type: bytes, required: true }
       final:   { type: bool, required: true }
+
+  FileDone:
+    description: "Final file transfer result"
+    fields:
+      file_id: { type: string, required: true }
+      ok:      { type: bool, required: true }
+      error:   { type: string, required: false }
 
   ClipboardUpdate:
     description: "Clipboard content synchronization"

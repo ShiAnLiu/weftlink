@@ -114,6 +114,16 @@ func handleConn(conn net.Conn) {
 			}
 			return
 		}
+		var head struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(payload, &head) == nil && head.Type == "file_offer" {
+			if err = handleIncomingFile(conn, payload); err != nil {
+				log.Println("file offer error:", err)
+				return
+			}
+			continue
+		}
 		var resp []byte
 		resp, err = handleRequest(conn.RemoteAddr(), payload)
 		if err != nil {
@@ -134,12 +144,17 @@ func handleConn(conn net.Conn) {
 // request is the union of all daemon control verbs. Keeping one struct keeps
 // the dispatcher small; unknown fields are ignored by encoding/json.
 type request struct {
-	Type  string       `json:"type"`
-	Code  string       `json:"code"`
-	Host  string       `json:"host"`
-	Nonce string       `json:"nonce"`
-	TS    int64        `json:"ts"`
-	Node  pairNodeWire `json:"node"`
+	Type           string       `json:"type"`
+	Code           string       `json:"code"`
+	Host           string       `json:"host"`
+	Nonce          string       `json:"nonce"`
+	TS             int64        `json:"ts"`
+	Node           pairNodeWire `json:"node"`
+	Peer           string       `json:"peer"`
+	Path           string       `json:"path"`
+	Dir            string       `json:"dir"`
+	From           string       `json:"from"`
+	TimeoutSeconds int          `json:"timeout_seconds"`
 }
 
 type helloAck struct {
@@ -205,6 +220,45 @@ type pairDeniedResponse struct {
 type errorResponse struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+type peerStatusResultResponse struct {
+	Type   string          `json:"type"`
+	OK     bool            `json:"ok"`
+	Status *statusResponse `json:"status,omitempty"`
+	Error  string          `json:"error,omitempty"`
+}
+
+type sendFileResponse struct {
+	Type     string `json:"type"`
+	OK       bool   `json:"ok"`
+	Checksum string `json:"checksum,omitempty"`
+	Size     int64  `json:"size,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+type recvBeginResponse struct {
+	Type           string `json:"type"`
+	OK             bool   `json:"ok"`
+	Dir            string `json:"dir,omitempty"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
+	Error          string `json:"error,omitempty"`
+}
+
+type recvWaitResponse struct {
+	Type       string `json:"type"`
+	OK         bool   `json:"ok"`
+	Path       string `json:"path,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Size       int64  `json:"size,omitempty"`
+	Checksum   string `json:"checksum,omitempty"`
+	FromNodeID string `json:"from_node_id,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+type recvCancelResponse struct {
+	Type string `json:"type"`
+	OK   bool   `json:"ok"`
 }
 
 func handleRequest(remote net.Addr, payload []byte) ([]byte, error) {
@@ -278,6 +332,72 @@ func handleRequest(remote net.Addr, payload []byte) ([]byte, error) {
 			break
 		}
 		resp = pairConfirmResponse{Type: "pair_confirm", Node: node}
+	case "peer_status":
+		var status statusResponse
+		status, err = peerStatus(req.Peer)
+		if err != nil {
+			resp = peerStatusResultResponse{Type: "peer_status", OK: false, Error: err.Error()}
+			break
+		}
+		resp = peerStatusResultResponse{Type: "peer_status", OK: true, Status: &status}
+	case "send_file":
+		var result sendFileResult
+		result, err = sendFileToPeer(req.Peer, req.Path)
+		if err != nil {
+			resp = sendFileResponse{Type: "send_result", OK: false, Error: err.Error()}
+			break
+		}
+		resp = sendFileResponse{
+			Type:     "send_result",
+			OK:       true,
+			Checksum: result.Checksum,
+			Size:     result.Size,
+		}
+	case "recv_begin":
+		var fromID = req.From
+		if fromID != "" {
+			var k Knot
+			k, err = resolvePairedPeer(fromID)
+			if err != nil {
+				resp = recvBeginResponse{Type: "recv_begin", OK: false, Error: err.Error()}
+				break
+			}
+			fromID = k.PeerID
+		}
+		var dir string
+		var timeout time.Duration
+		dir, timeout, err = beginReceive(req.Dir, fromID,
+			time.Duration(req.TimeoutSeconds)*time.Second)
+		if err != nil {
+			resp = recvBeginResponse{Type: "recv_begin", OK: false, Error: err.Error()}
+			break
+		}
+		resp = recvBeginResponse{
+			Type:           "recv_begin",
+			OK:             true,
+			Dir:            dir,
+			TimeoutSeconds: int(timeout.Seconds()),
+		}
+	case "recv_wait":
+		var result receiveResult
+		result, err = waitReceive(time.Duration(req.TimeoutSeconds) * time.Second)
+		if err != nil {
+			resp = recvWaitResponse{Type: "recv_result", OK: false, Error: err.Error()}
+			break
+		}
+		resp = recvWaitResponse{
+			Type:       "recv_result",
+			OK:         result.OK,
+			Path:       result.Path,
+			Name:       result.Name,
+			Size:       result.Size,
+			Checksum:   result.Checksum,
+			FromNodeID: result.FromNodeID,
+			Error:      result.Error,
+		}
+	case "recv_cancel":
+		cancelReceive()
+		resp = recvCancelResponse{Type: "recv_cancelled", OK: true}
 	default:
 		resp = errorResponse{Type: "error", Message: "unknown type: " + req.Type}
 	}

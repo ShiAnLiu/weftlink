@@ -156,6 +156,55 @@ jobs:
       - name: Test
         run: ctest --test-dir build/qt --output-on-failure
 
+  transfer:
+    name: File transfer (two daemons)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: |
+          mkdir -p bin
+          go build -trimpath -o bin/weftlinkd ./src
+          go build -trimpath -o bin/weftlink ./cli
+
+      - name: Pair, send, receive
+        run: |
+          rm -rf /tmp/weftlink-a /tmp/weftlink-b /tmp/weftlink-recv
+          WEFTLINK_HOME=/tmp/weftlink-a WEFTLINK_NAME=ci-a WEFTLINK_PORT=7821 \
+            ./bin/weftlinkd > /tmp/weftlink-a.log 2>&1 &
+          WEFTLINK_HOME=/tmp/weftlink-b WEFTLINK_NAME=ci-b WEFTLINK_PORT=7831 \
+            ./bin/weftlinkd > /tmp/weftlink-b.log 2>&1 &
+          for port in 7821 7831; do
+            for i in $(seq 1 30); do
+              if timeout 1 bash -c "</dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+          done
+
+          code=$(./bin/weftlink knot --port 7821 --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["code"])')
+          ./bin/weftlink knot "$code" --peer 127.0.0.1:7821 --port 7831
+
+          ./bin/weftlink recv --port 7831 --dir /tmp/weftlink-recv --from ci-a --timeout 60 \
+            > /tmp/weftlink-recv.log 2>&1 &
+          recv_pid=$!
+          sleep 1
+          head -c 262144 /dev/urandom > /tmp/payload.bin
+          ./bin/weftlink send ci-b /tmp/payload.bin --port 7821
+          wait "$recv_pid"
+          cat /tmp/weftlink-recv.log
+          cmp /tmp/payload.bin /tmp/weftlink-recv/payload.bin
+          ./bin/weftlink status ci-b --port 7821 | grep -q "remote peer"
+
   cli:
     name: CLI (build + smoke)
     runs-on: ubuntu-latest

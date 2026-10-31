@@ -21,10 +21,12 @@ Usage:
 
 Commands:
   up                 Start weftlinkd if it is not already running
-  status             Show local daemon status
+  status [peer]      Local status, or a paired peer's status
   ls                 List peers discovered on the LAN
   ping               Measure round-trip time to the local daemon
   knot [code]        Pair with a peer; without a code, print a new pair code
+  send <peer> <file> Send a file to a paired peer
+  recv [flags]       Wait for one incoming file (receiver must opt in first)
   version            Print version information
   help               Show this help
 
@@ -151,6 +153,10 @@ func main() {
 		err = cmdPing(args)
 	case "knot":
 		err = cmdKnot(args)
+	case "send":
+		err = cmdSend(args)
+	case "recv":
+		err = cmdRecv(args)
 	default:
 		fmt.Fprintf(os.Stderr, "weftlink: unknown command %q\n\n", cmd)
 		printUsage(os.Stderr)

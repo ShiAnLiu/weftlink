@@ -63,6 +63,40 @@ type knotResultResponse struct {
 	Error string `json:"error"`
 }
 
+type peerStatusResult struct {
+	Type   string          `json:"type"`
+	OK     bool            `json:"ok"`
+	Status *statusResponse `json:"status"`
+	Error  string          `json:"error"`
+}
+
+type sendFileResult struct {
+	Type     string `json:"type"`
+	OK       bool   `json:"ok"`
+	Checksum string `json:"checksum"`
+	Size     int64  `json:"size"`
+	Error    string `json:"error"`
+}
+
+type recvBeginResult struct {
+	Type           string `json:"type"`
+	OK             bool   `json:"ok"`
+	Dir            string `json:"dir"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
+	Error          string `json:"error"`
+}
+
+type recvWaitResult struct {
+	Type       string `json:"type"`
+	OK         bool   `json:"ok"`
+	Path       string `json:"path"`
+	Name       string `json:"name"`
+	Size       int64  `json:"size"`
+	Checksum   string `json:"checksum"`
+	FromNodeID string `json:"from_node_id"`
+	Error      string `json:"error"`
+}
+
 type daemonClient struct {
 	client *proto.Client
 }

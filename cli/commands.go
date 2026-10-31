@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -39,8 +40,30 @@ func cmdStatus(args []string) error {
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
-	if err := noArgs(fs); err != nil {
-		return err
+	if fs.NArg() > 1 {
+		return fmt.Errorf("usage: weftlink status [peer]")
+	}
+	if fs.NArg() == 1 {
+		var d, err = dialDaemon(g, 5*time.Second)
+		if err != nil {
+			return err
+		}
+		defer d.close()
+		var result peerStatusResult
+		err = d.call(map[string]string{
+			"type": "peer_status",
+			"peer": fs.Arg(0),
+		}, &result, 15*time.Second)
+		if err != nil {
+			return err
+		}
+		if !result.OK || result.Status == nil {
+			return fmt.Errorf("%s", result.Error)
+		}
+		if !g.json {
+			fmt.Printf("remote peer: %s\n", fs.Arg(0))
+		}
+		return printStatus(*result.Status, g.json)
 	}
 	var s, err = fetchStatus(g, 5*time.Second)
 	if err != nil {
@@ -282,6 +305,143 @@ func isLocalHost(host string) bool {
 	}
 	var ip = net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+func cmdSend(args []string) error {
+	var fs, g = newFlagSet("send")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if fs.NArg() != 2 {
+		return fmt.Errorf("usage: weftlink send <peer> <file>")
+	}
+	var peerArg = fs.Arg(0)
+	var source = fs.Arg(1)
+	var abs, err = filepath.Abs(source)
+	if err != nil {
+		return err
+	}
+	var stat, statErr = os.Stat(abs)
+	if statErr != nil {
+		return statErr
+	}
+	if !stat.Mode().IsRegular() {
+		return fmt.Errorf("not a regular file: %s", abs)
+	}
+
+	var d, dialErr = dialDaemon(g, 5*time.Second)
+	if dialErr != nil {
+		return dialErr
+	}
+	defer d.close()
+
+	if !g.json {
+		fmt.Printf("Sending %s (%s) to %s ...\n", filepath.Base(abs), humanBytes(stat.Size()), peerArg)
+	}
+	var start = time.Now()
+	var result sendFileResult
+	err = d.call(map[string]any{
+		"type": "send_file",
+		"peer": peerArg,
+		"path": abs,
+	}, &result, 30*time.Minute)
+	if err != nil {
+		return err
+	}
+	if !result.OK {
+		return fmt.Errorf("send failed: %s", result.Error)
+	}
+	if g.json {
+		return printJSON(result)
+	}
+	fmt.Printf("Sent %s (%s) to %s in %s\n", filepath.Base(abs),
+		humanBytes(result.Size), peerArg, time.Since(start).Round(time.Millisecond))
+	fmt.Printf("sha256: %s\n", result.Checksum)
+	return nil
+}
+
+func cmdRecv(args []string) error {
+	var fs, g = newFlagSet("recv")
+	var dir = fs.String("dir", "", "destination directory (default ~/Downloads/Weftlink)")
+	var from = fs.String("from", "", "only accept from this paired peer")
+	var timeout = fs.Int("timeout", 300, "seconds to wait for a file")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noArgs(fs); err != nil {
+		return err
+	}
+	if *timeout < 10 {
+		*timeout = 10
+	}
+
+	var d, err = dialDaemon(g, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer d.close()
+
+	var begin recvBeginResult
+	err = d.call(map[string]any{
+		"type":            "recv_begin",
+		"dir":             *dir,
+		"from":            *from,
+		"timeout_seconds": *timeout,
+	}, &begin, 15*time.Second)
+	if err != nil {
+		return err
+	}
+	if !begin.OK {
+		return fmt.Errorf("%s", begin.Error)
+	}
+	if !g.json {
+		var source = "any paired peer"
+		if *from != "" {
+			source = *from
+		}
+		fmt.Printf("Waiting for a file from %s in %s (up to %ds) ...\n",
+			source, begin.Dir, begin.TimeoutSeconds)
+	}
+
+	var result recvWaitResult
+	err = d.call(map[string]any{
+		"type":            "recv_wait",
+		"timeout_seconds": begin.TimeoutSeconds,
+	}, &result, time.Duration(begin.TimeoutSeconds+20)*time.Second)
+	if err != nil {
+		return err
+	}
+	if g.json {
+		if printErr := printJSON(result); printErr != nil {
+			return printErr
+		}
+		if !result.OK {
+			return fmt.Errorf("%s", result.Error)
+		}
+		return nil
+	}
+	if !result.OK {
+		return fmt.Errorf("%s", result.Error)
+	}
+	fmt.Printf("Received %s (%s) from %s\n", result.Name,
+		humanBytes(result.Size), label(result.FromNodeID))
+	fmt.Printf("saved:  %s\n", result.Path)
+	fmt.Printf("sha256: %s\n", result.Checksum)
+	return nil
+}
+
+func humanBytes(n int64) string {
+	const unit = int64(1024)
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	var divisor = unit
+	var exponent = 0
+	for value := n / unit; value >= unit; value /= unit {
+		divisor *= unit
+		exponent++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(divisor), "KMGTPE"[exponent])
 }
 
 func label(s string) string {

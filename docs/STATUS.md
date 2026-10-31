@@ -7,7 +7,7 @@ Last updated: 2026-10-31
 | M0        | 🟢     | 2026-10-02 |
 | M0.5      | 🟢     | 2026-10-06 |
 | M1        | 🟢     | 2026-10-31 |
-| M2        | ⚪     | —      |
+| M2        | 🔴     | 2026-10-31 |
 | M3        | ⚪     | —      |
 | M4        | ⚪     | —      |
 | M5        | ⚪     | —      |
@@ -58,6 +58,16 @@ Last updated: 2026-10-31
 - **schema 生成器**：`go run ./tools/gen` 产出三语言类型；CI `-check` 防漂移。
 - **ArkTS 客户端**：TLSSocket + 帧解析 + ArkUI 状态页（待真机验证）。
 
+## M2 — 互控四件套（CLI，进行中）
+
+- ✅ **文件发送**：接收端先 `weftlink recv --from <peer> --dir <dir>` 显式打开一次性接收窗口；
+  发送端 `weftlink send <peer> <file>`。FileOffer/FileAccept/FileChunk/FileDone，
+  仅限已配对 peer，64 KiB 分块，SHA-256 + 大小校验，`.part` 临时文件 + 原子改名，
+  文件名消毒/去重。两台本地 daemon（7821/7831）端到端传输 + 校验已跑通。
+- ✅ **远程 status**：`weftlink status <peer>` 经 `peer_status` 控制动词读取对方的
+  节点/peers/发现计数；仅限已配对 peer。
+- ⏳ 待办：clipboard 同步、run 远程命令（需显式批准/超时），以及 C++/Qt 客户端接入。
+
 ## 桌面客户端（C++/Qt，新增）
 
 - `clients/cpp`：共享 `weftclient`（Qt Network/`QSslSocket` + Weft 帧），
@@ -72,7 +82,7 @@ Last updated: 2026-10-31
 
 | 套件 | 数量 | 命令 |
 |------|------|------|
-| Go 单元/集成 | 34 | `go test ./...` |
+| Go 单元/集成 | 41 | `go test ./...` |
 | Dart core_client | 2 | `dart test` |
 | Flutter app | 3 | `flutter test` |
 | C++/Qt | 6 | `ctest --test-dir build/qt` |
@@ -80,7 +90,7 @@ Last updated: 2026-10-31
 
 ## CI/CD
 
-- **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ C++/Qt（Linux/Windows 构建 + CTest + TUI `--check`）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
+- **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ 文件传输双 daemon 端到端（配对→recv→send→校验）+ C++/Qt（Linux/Windows 构建 + CTest + TUI `--check`）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
 - **CD**：tag `v*` → 先跑 vet/test/gen 门禁 → 交叉编译 `weftlinkd` 与 `weftlink`（windows/linux/darwin × amd64/arm64）→ SHA256SUMS → GitHub Release；tag 版本号通过 `-X main.productVersion` / `-X main.version` 注入
 - 已发布：v0.1.0、v0.2.0、v0.3.0、v0.4.0（CLI + 发现/配对 + 桌面 UI + 开箱即用压缩包）
 

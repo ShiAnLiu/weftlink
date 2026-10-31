@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- **File transfer (M2)**: `weftlink send <peer> <file>` and
+  `weftlink recv --from <peer> --dir <dir>` with explicit receiver consent.
+  Paired-only TLS transfer, `FileOffer` / `FileAccept` / `FileChunk` /
+  `FileDone`, 64 KiB chunks, SHA-256 + size verification, sanitized/unique
+  file names, `.part` temp file + atomic rename.
+- **Remote status**: `weftlink status <peer>` queries a paired peer's daemon
+  through the `peer_status` control verb.
 - **C++/Qt desktop clients** (`clients/cpp`): shared Qt 6 `weftclient`
   (`QSslSocket` TLS + Weft framing), a Qt Widgets GUI and a full-screen ANSI
   TUI. Both show node identity, discovery counters, peers, pairing and Ping

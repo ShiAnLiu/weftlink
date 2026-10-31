@@ -52,24 +52,40 @@ func (c *Client) RoundTrip(req any, resp any) error {
 
 // RoundTripTimeout is RoundTrip with an explicit deadline.
 func (c *Client) RoundTripTimeout(req any, resp any, timeout time.Duration) error {
+	if err := c.SendTimeout(req, timeout); err != nil {
+		return err
+	}
+	return c.ReceiveTimeout(resp, timeout)
+}
+
+// SendTimeout encodes value and writes one frame with a write deadline.
+func (c *Client) SendTimeout(value any, timeout time.Duration) error {
 	var payload []byte
 	var err error
-	payload, err = json.Marshal(req)
+	payload, err = json.Marshal(value)
 	if err != nil {
 		return err
 	}
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	if err = c.conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+	if err = c.conn.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
 		return err
 	}
-	if err = WriteFrame(c.conn, payload); err != nil {
+	return WriteFrame(c.conn, payload)
+}
+
+// ReceiveTimeout reads one frame and decodes it with a read deadline.
+func (c *Client) ReceiveTimeout(value any, timeout time.Duration) error {
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	if err := c.conn.SetReadDeadline(time.Now().Add(timeout)); err != nil {
 		return err
 	}
 	var raw []byte
-	if err = ReadFrame(c.conn, &raw); err != nil {
+	if err := ReadFrame(c.conn, &raw); err != nil {
 		return err
 	}
-	return json.Unmarshal(raw, resp)
+	return json.Unmarshal(raw, value)
 }
