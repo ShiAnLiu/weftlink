@@ -118,9 +118,110 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  msix:
+    name: MSIX (Windows x64)
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          cache: true
+
+      - name: Configure C++ clients
+        run: |
+          cmake -S clients/cpp -B build/qt -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+
+      - name: Build C++ clients
+        run: cmake --build build/qt
+
+      - name: Stage Windows package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/msix-package | Out-Null
+          go build -trimpath -ldflags "-s -w" -o build/msix-package/weftlink.exe ./cli
+          go build -trimpath -ldflags "-s -w" -o build/msix-package/weftlinkd.exe ./src
+          Copy-Item build/qt/weftlink-gui.exe,build/qt/weftlink-tui.exe build/msix-package -Force
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --release --no-translations `
+            --compiler-runtime --dir build/msix-package `
+            build/msix-package/weftlink-gui.exe build/msix-package/weftlink-tui.exe
+
+      - name: Prepare signing certificate
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.MSIX_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.MSIX_PFX_PASSWORD }}
+        run: |
+          New-Item -ItemType Directory -Force build | Out-Null
+          if ($env:PFX_B64) {
+            [IO.File]::WriteAllBytes("build/weftlink-signing.pfx", [Convert]::FromBase64String($env:PFX_B64))
+            $password = $env:PFX_PASSWORD
+            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
+              "build/weftlink-signing.pfx", $password)
+            $publisher = $cert.Subject
+            $cer = $cert.Export([System.Security.Cryptography.X509Certificates.X509ContentType]::Cert)
+            [IO.File]::WriteAllBytes("build/weftlink-signing.cer", $cer)
+            "MSIX_DEV_CERT=0" >> $env:GITHUB_ENV
+          } else {
+            $password = "weftlink"
+            $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Weftlink" `
+              -KeyUsage DigitalSignature -FriendlyName "Weftlink MSIX Dev" `
+              -CertStoreLocation "Cert:\CurrentUser\My" `
+              -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}") `
+              -NotAfter (Get-Date).AddYears(3)
+            $pwd = ConvertTo-SecureString $password -Force -AsPlainText
+            Export-PfxCertificate -Cert $cert -FilePath build/weftlink-signing.pfx -Password $pwd | Out-Null
+            Export-Certificate -Cert $cert -FilePath build/weftlink-signing.cer | Out-Null
+            $publisher = "CN=Weftlink"
+            "MSIX_DEV_CERT=1" >> $env:GITHUB_ENV
+          }
+          "MSIX_PUBLISHER=$publisher" >> $env:GITHUB_ENV
+          "MSIX_PFX_PASSWORD=$password" >> $env:GITHUB_ENV
+
+      - name: Build signed MSIX
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          ./packaging/msix/build-msix.ps1 `
+            -PackageDir build/msix-package `
+            -Version $version `
+            -OutFile "build/weftlink-$version-x64.msix" `
+            -Publisher $env:MSIX_PUBLISHER `
+            -CertificatePfx build/weftlink-signing.pfx `
+            -CertificatePassword $env:MSIX_PFX_PASSWORD
+
+      - name: Upload MSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: weftlink-msix
+          path: |
+            build/weftlink-*-x64.msix
+            build/weftlink-signing.cer
+          if-no-files-found: error
+
   release:
     name: Create release
-    needs: build
+    needs: [build, msix]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

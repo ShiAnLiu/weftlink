@@ -62,6 +62,14 @@ GUI also has an M2 tab for file send/receive, remote status, run approval and
 clipboard push/pull. Build/deploy instructions:
 [`clients/cpp/README.md`](clients/cpp/README.md).
 
+## Packaging
+
+- Full Windows zip (CLI + daemon + GUI + TUI + Qt DLLs) is built from the
+  local `clients/cpp/scripts/deploy.ps1` output plus `bin/`.
+- MSIX is built in CI/CD: `packaging/msix/build-msix.ps1`; see
+  [`packaging/msix/README.md`](packaging/msix/README.md). Tag releases attach
+  `weftlink-<version>-x64.msix` and the signing certificate.
+
 ## Directory Layout
 
 ```

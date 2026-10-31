@@ -33,6 +33,9 @@ qt_add_executable(weftlink-gui WIN32
     gui/pair_dialog.cpp
 )
 target_link_libraries(weftlink-gui PRIVATE weftclient Qt6::Widgets)
+if (WIN32)
+    target_link_libraries(weftlink-gui PRIVATE shell32)
+endif()
 
 qt_add_executable(weftlink-tui
     tui/main.cpp

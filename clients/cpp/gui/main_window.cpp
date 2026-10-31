@@ -37,6 +37,17 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#ifdef Q_OS_WIN
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 namespace {
 
 QLabel *makeCaption(const QString &text, QWidget *parent)
@@ -158,11 +169,16 @@ void MainWindow::buildUi()
     endpointButtons->addWidget(m_connectButton, 2);
     endpointButtons->addWidget(m_pingButton, 1);
 
+    m_firewallButton = new QPushButton(QStringLiteral("Firewall rules"), central);
+    m_firewallButton->setToolTip(
+        QStringLiteral("Add inbound TCP 7801 / UDP 7802 rules (UAC prompt)"));
+
     auto *endpointForm = new QFormLayout;
     endpointForm->setLabelAlignment(Qt::AlignLeft);
     endpointForm->addRow(QStringLiteral("Host"), m_hostEdit);
     endpointForm->addRow(QStringLiteral("Port"), m_portSpin);
     endpointForm->addRow(endpointButtons);
+    endpointForm->addRow(m_firewallButton);
 
     auto *endpointBox = new QGroupBox(QStringLiteral("Daemon"), central);
     endpointBox->setLayout(endpointForm);
@@ -444,6 +460,7 @@ void MainWindow::buildUi()
     connect(m_peerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { setM2Enabled(m_client->isConnected()); });
     connect(remoteStatusButton, &QPushButton::clicked, this, &MainWindow::remoteStatus);
     connect(m_unpairButton, &QPushButton::clicked, this, &MainWindow::unpairSelectedPeer);
+    connect(m_firewallButton, &QPushButton::clicked, this, &MainWindow::configureFirewallElevated);
     connect(browseSendButton, &QPushButton::clicked, this, &MainWindow::browseSendFile);
     connect(browseRecvButton, &QPushButton::clicked, this, &MainWindow::browseReceiveDir);
     connect(m_sendFileButton, &QPushButton::clicked, this, &MainWindow::sendFile);
@@ -802,6 +819,25 @@ void MainWindow::remoteStatus()
     }
     m_client->requestPeerStatus(peer);
     statusBar()->showMessage(QStringLiteral("Requesting remote status..."), 3000);
+}
+
+void MainWindow::configureFirewallElevated()
+{
+#ifdef Q_OS_WIN
+    const auto cli = findWeftlinkCli();
+    auto cliWide = cli.toStdWString();
+    const auto result = reinterpret_cast<INT_PTR>(ShellExecuteW(
+        nullptr, L"runas", cliWide.c_str(), L"firewall allow", nullptr, SW_HIDE));
+    if (result <= 32) {
+        appendLog(QStringLiteral("Firewall setup was cancelled or could not elevate: %1").arg(cli));
+        statusBar()->showMessage(QStringLiteral("Firewall setup cancelled/failed"), 6000);
+    } else {
+        appendLog(QStringLiteral("Requested administrator firewall setup"));
+        statusBar()->showMessage(QStringLiteral("Firewall rules requested (UAC)"), 6000);
+    }
+#else
+    appendLog(QStringLiteral("Firewall helper is Windows-only; allow TCP 7801 / UDP 7802"));
+#endif
 }
 
 void MainWindow::unpairSelectedPeer()

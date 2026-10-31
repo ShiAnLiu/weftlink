@@ -52,7 +52,10 @@ Last updated: 2026-10-31
 - ✅ **取消配对**：`weftlink untie <peer>`（别名 `unpair`）/ GUI Unpair；删除本地
   knot，并 best-effort 通知对方 `unpair_request`（对方离线时本地仍成功）。
 - ✅ **自动防火墙**：`weftlink firewall allow`（Windows 管理员）写入 TCP 7801 /
-  UDP 7802、`profile=any` 入站规则。
+  UDP 7802、`profile=any` 入站规则；GUI 的 **Firewall rules** 按钮通过 UAC 提权，
+  `weftlink up` 在管理员权限下也会自动应用。
+- ✅ **MSIX 打包**：`packaging/msix/build-msix.ps1` 生成全信任 MSIX（GUI/TUI/CLI/
+  daemon + Qt 运行时），CI 校验，CD 在 tag release 中附带 `.msix` 与签名证书。
 - ✅ **GUI/TUI 自动拉起 daemon**：连接失败时尝试 `weftlink up` 后重试。
 - ✅ **远程命令无控制台弹窗**：批准后子进程使用 `CREATE_NO_WINDOW`；deny/timeout
   会在调用方 GUI 弹出提示。
@@ -111,8 +114,8 @@ Last updated: 2026-10-31
 
 ## CI/CD
 
-- **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ M2 双 daemon 端到端（配对→recv→send→校验→远程 status→run 审批执行）+ C++/Qt（Linux/Windows 构建 + CTest + TUI `--check`）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
-- **CD**：tag `v*` → 先跑 vet/test/gen 门禁 → 交叉编译 `weftlinkd` 与 `weftlink`（windows/linux/darwin × amd64/arm64）→ SHA256SUMS → GitHub Release；tag 版本号通过 `-X main.productVersion` / `-X main.version` 注入
+- **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ M2 双 daemon 端到端（配对→recv→send→校验→远程 status→run 审批执行）+ C++/Qt（Linux/Windows 构建 + CTest + TUI `--check`）+ Windows MSIX 打包/签名 + Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
+- **CD**：tag `v*` → 先跑 vet/test/gen 门禁 → 交叉编译 `weftlinkd` 与 `weftlink`（windows/linux/darwin × amd64/arm64）+ 构建签名 MSIX → SHA256SUMS → GitHub Release；tag 版本号通过 `-X main.productVersion` / `-X main.version` 注入
 - 已发布：v0.1.0、v0.2.0、v0.3.0、v0.4.0（CLI + 发现/配对 + 桌面 UI + 开箱即用压缩包）
 
 ## 经验记录（踩坑）

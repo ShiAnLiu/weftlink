@@ -38,6 +38,23 @@ func configureFirewall() error {
 	return nil
 }
 
+// tryConfigureFirewall runs automatically during `weftlink up` when elevated.
+func tryConfigureFirewall() {
+	if !isAdmin() {
+		return
+	}
+	_ = configureFirewall()
+}
+
+func isAdmin() bool {
+	var cmd = exec.Command("net", "session")
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow:    true,
+		CreationFlags: 0x08000000,
+	}
+	return cmd.Run() == nil
+}
+
 func runNetsh(args ...string) error {
 	var cmd = exec.Command("netsh", args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{

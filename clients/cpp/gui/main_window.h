@@ -58,6 +58,7 @@ private slots:
     void onExecRequests(const QList<weft::ExecRequest> &requests);
     void approveSelectedExec();
     void unpairSelectedPeer();
+    void configureFirewallElevated();
     void denySelectedExec();
     void onExecAction(bool ok, const QString &error);
     void enableClipboard();
@@ -93,6 +94,7 @@ private:
     QPushButton *m_newCodeButton = nullptr;
     QPushButton *m_joinButton = nullptr;
     QPushButton *m_copyCodeButton = nullptr;
+    QPushButton *m_firewallButton = nullptr;
 
     QLabel *m_stateValue = nullptr;
     QLabel *m_nodeValue = nullptr;

@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### Added
+- **MSIX packaging (CI/CD)**: `packaging/msix/build-msix.ps1` builds a signed
+  full-trust MSIX with Qt runtime, CLI, daemon, GUI and TUI; CI validates the
+  package and CD attaches `weftlink-<version>-x64.msix` plus the signing cert.
+- **Firewall integration**: the GUI has a `Firewall rules` button (UAC
+  elevation); `weftlink up` also applies the rules automatically when running
+  elevated. `weftlink firewall allow` remains available explicitly.
 - **Unpair** (`weftlink untie` / GUI Unpair): removes the local knot and
   best-effort notifies the peer (`unpair_request` / `unpair_ack`).
 - **Firewall helper**: `weftlink firewall allow` (Windows, administrator)

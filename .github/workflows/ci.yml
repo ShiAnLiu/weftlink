@@ -156,6 +156,56 @@ jobs:
       - name: Test
         run: ctest --test-dir build/qt --output-on-failure
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Stage Windows package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/msix-package | Out-Null
+          go build -trimpath -ldflags "-s -w" -o build/msix-package/weftlink.exe ./cli
+          go build -trimpath -ldflags "-s -w" -o build/msix-package/weftlinkd.exe ./src
+          Copy-Item build/qt/weftlink-gui.exe,build/qt/weftlink-tui.exe build/msix-package -Force
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --release --no-translations `
+            --compiler-runtime --dir build/msix-package `
+            build/msix-package/weftlink-gui.exe build/msix-package/weftlink-tui.exe
+
+      - name: Create MSIX signing certificate
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Weftlink" `
+            -KeyUsage DigitalSignature -FriendlyName "Weftlink MSIX Dev" `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}") `
+            -NotAfter (Get-Date).AddYears(3)
+          $pwd = ConvertTo-SecureString "weftlink" -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath build/weftlink-dev.pfx -Password $pwd | Out-Null
+          Export-Certificate -Cert $cert -FilePath build/weftlink-dev.cer | Out-Null
+
+      - name: Build MSIX
+        shell: pwsh
+        run: |
+          $match = Select-String -Path src/core.go -Pattern 'var productVersion = "([^"]+)"' | Select-Object -First 1
+          $version = if ($match) { $match.Matches[0].Groups[1].Value } else { "0.5.0" }
+          ./packaging/msix/build-msix.ps1 `
+            -PackageDir build/msix-package `
+            -Version $version `
+            -OutFile "build/weftlink-$version-x64.msix" `
+            -CertificatePfx build/weftlink-dev.pfx `
+            -CertificatePassword "weftlink"
+
+      - name: Upload MSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: weftlink-msix
+          path: |
+            build/weftlink-*-x64.msix
+            build/weftlink-dev.cer
+          if-no-files-found: error
+
   transfer:
     name: M2 e2e (two daemons)
     runs-on: ubuntu-latest

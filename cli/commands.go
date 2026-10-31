@@ -276,6 +276,7 @@ func cmdUp(args []string) error {
 	if err := noArgs(fs); err != nil {
 		return err
 	}
+	tryConfigureFirewall()
 	if s, err := fetchStatus(g, 2*time.Second); err == nil {
 		if !g.json {
 			fmt.Println("weftlinkd is already running")
