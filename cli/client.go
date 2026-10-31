@@ -23,15 +23,20 @@ type peer struct {
 }
 
 type statusResponse struct {
-	Type        string `json:"type"`
-	NodeID      string `json:"node_id"`
-	DisplayName string `json:"display_name"`
-	Role        string `json:"role"`
-	Version     string `json:"version"`
-	Fingerprint string `json:"fingerprint"`
-	Peers       []peer `json:"peers"`
-	PeerCount   int    `json:"peer_count"`
-	PairedCount int    `json:"paired_count"`
+	Type            string `json:"type"`
+	NodeID          string `json:"node_id"`
+	DisplayName     string `json:"display_name"`
+	Role            string `json:"role"`
+	Version         string `json:"version"`
+	Fingerprint     string `json:"fingerprint"`
+	Peers           []peer `json:"peers"`
+	PeerCount       int    `json:"peer_count"`
+	PairedCount     int    `json:"paired_count"`
+	DiscoveryPort   int    `json:"discovery_port"`
+	DiscoveryActive bool   `json:"discovery_active"`
+	BeaconsSent     int64  `json:"beacons_sent"`
+	BeaconsReceived int64  `json:"beacons_received"`
+	LastBeaconMs    int64  `json:"last_beacon_ms"`
 }
 
 type peersResponse struct {

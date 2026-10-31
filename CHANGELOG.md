@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **C++/Qt desktop clients** (`clients/cpp`): shared Qt 6 `weftclient`
+  (`QSslSocket` TLS + Weft framing), a Qt Widgets GUI and a full-screen ANSI
+  TUI. Both show node identity, discovery counters, peers, pairing and Ping
+  RTT; one-time pair codes can be generated or joined. `weftlink-tui --check`
+  is a headless smoke test used by CI.
+- **Discovery diagnostics**: `status` now reports the discovery port, whether
+  the beacon listener is active, and beacon sent/received counters. Beacons are
+  emitted from the listener socket (source port 7802) to the multicast group,
+  limited broadcast, each interface's directed broadcast, and known peers. The
+  CLI prints the same counters, making firewall/Public-network issues visible.
+- CMake/CTest build (`weftclient_tests` covers framing), Windows deploy script
+  (`windeployqt` + OpenSSL/MinGW runtime), and CI jobs for Linux/Windows.
+- ADR-0002 records the desktop UI stack change from Flutter to C++/Qt; Flutter
+  remains for mobile.
+
 ## [0.4.0] — 2026-10-31
 
 ### Added

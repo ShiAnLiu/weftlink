@@ -65,6 +65,97 @@ jobs:
             exit 1
           fi
 
+  qt-linux:
+    name: C++/Qt (Linux build + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          cache: true
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libssl-dev libgl1-mesa-dev \
+            libxkbcommon-dev libfontconfig1-dev
+
+      - name: Configure
+        run: |
+          cmake -S clients/cpp -B build/qt -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build build/qt
+
+      - name: Test
+        run: |
+          export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib:${LD_LIBRARY_PATH:-}"
+          ctest --test-dir build/qt --output-on-failure
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: TUI TLS smoke test against live daemon
+        env:
+          WEFTLINK_HOME: ${{ runner.temp }}/weftlink-home
+        run: |
+          mkdir -p bin
+          go build -trimpath -o bin/weftlinkd ./src
+          ./bin/weftlinkd > /tmp/weftlinkd.log 2>&1 &
+          for i in $(seq 1 30); do
+            if timeout 1 bash -c '</dev/tcp/127.0.0.1/7801' 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib:${LD_LIBRARY_PATH:-}"
+          ./build/qt/weftlink-tui --check
+
+  qt-windows:
+    name: C++/Qt (Windows build + tests)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.2'
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+          cache: true
+
+      - name: Configure
+        run: |
+          cmake -S clients/cpp -B build/qt -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build build/qt
+
+      - name: Test
+        run: ctest --test-dir build/qt --output-on-failure
+
   cli:
     name: CLI (build + smoke)
     runs-on: ubuntu-latest

@@ -58,18 +58,29 @@ Last updated: 2026-10-31
 - **schema 生成器**：`go run ./tools/gen` 产出三语言类型；CI `-check` 防漂移。
 - **ArkTS 客户端**：TLSSocket + 帧解析 + ArkUI 状态页（待真机验证）。
 
+## 桌面客户端（C++/Qt，新增）
+
+- `clients/cpp`：共享 `weftclient`（Qt Network/`QSslSocket` + Weft 帧），
+  `weftlink-gui`（Qt Widgets 双栏控制台）与 `weftlink-tui`（全屏 ANSI）。
+  展示节点/发现计数/peers/配对/Ping/日志，支持生成与输入 6 位配对码。
+- 本地验证（2026-10-31）：MinGW 13.1 + Qt 6.7.2 构建通过；CTest 6 项全绿；
+  `weftlink-tui --check` 对运行中的 daemon 成功读取状态/peers；
+  `windeployqt` 打包后的 GUI/TUI 在最小 PATH 下可独立运行。
+- 决策记录：ADR-0002（桌面栈由 Flutter 改为 C++/Qt；Flutter 移动端保留）。
+
 ## 测试与检查（全绿）
 
 | 套件 | 数量 | 命令 |
 |------|------|------|
-| Go 单元/集成 | 32 | `go test ./...` |
+| Go 单元/集成 | 34 | `go test ./...` |
 | Dart core_client | 2 | `dart test` |
 | Flutter app | 3 | `flutter test` |
+| C++/Qt | 6 | `ctest --test-dir build/qt` |
 | 生成物一致性 | 3 | `go run ./tools/gen -check` |
 
 ## CI/CD
 
-- **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
+- **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ C++/Qt（Linux/Windows 构建 + CTest + TUI `--check`）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
 - **CD**：tag `v*` → 先跑 vet/test/gen 门禁 → 交叉编译 `weftlinkd` 与 `weftlink`（windows/linux/darwin × amd64/arm64）→ SHA256SUMS → GitHub Release；tag 版本号通过 `-X main.productVersion` / `-X main.version` 注入
 - 已发布：v0.1.0、v0.2.0、v0.3.0、v0.4.0（CLI + 发现/配对 + 桌面 UI + 开箱即用压缩包）
 

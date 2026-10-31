@@ -58,6 +58,16 @@ func printStatus(s statusResponse, jsonOut bool) error {
 	fmt.Printf("role:        %s\n", s.Role)
 	fmt.Printf("fingerprint: %s\n", s.Fingerprint)
 	fmt.Printf("peers:       %d discovered, %d paired\n", s.PeerCount, s.PairedCount)
+	if s.DiscoveryActive {
+		var last = "-"
+		if s.LastBeaconMs > 0 {
+			last = peerAge(s.LastBeaconMs)
+		}
+		fmt.Printf("discovery:   udp/%d active, sent %d, received %d (last %s)\n",
+			s.DiscoveryPort, s.BeaconsSent, s.BeaconsReceived, last)
+	} else {
+		fmt.Printf("discovery:   udp/%d inactive\n", s.DiscoveryPort)
+	}
 	return nil
 }
 

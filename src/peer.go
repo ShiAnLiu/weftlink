@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -47,7 +48,31 @@ type beaconMessage struct {
 var (
 	peersMu sync.RWMutex
 	peers   = map[string]Peer{}
+
+	beaconActive    atomic.Bool
+	beaconsSent     atomic.Int64
+	beaconsReceived atomic.Int64
+	lastBeaconMs    atomic.Int64
 )
+
+// discoveryState is exposed through the status verb for diagnostics.
+type discoveryState struct {
+	Active         bool  `json:"active"`
+	Port           int   `json:"port"`
+	Sent           int64 `json:"sent"`
+	Received       int64 `json:"received"`
+	LastReceivedMs int64 `json:"last_received_ms"`
+}
+
+func currentDiscoveryState() discoveryState {
+	return discoveryState{
+		Active:         beaconActive.Load(),
+		Port:           discoveryPort,
+		Sent:           beaconsSent.Load(),
+		Received:       beaconsReceived.Load(),
+		LastReceivedMs: lastBeaconMs.Load(),
+	}
+}
 
 // startBeacon joins the multicast group and starts sending/receiving beacons.
 func startBeacon(port int) error {
@@ -59,45 +84,129 @@ func startBeacon(port int) error {
 		return err
 	}
 	_ = conn.SetReadBuffer(1 << 16)
+	beaconActive.Store(true)
 	go readBeacons(conn)
-	go sendBeacons(port)
+	go sendBeacons(conn, port)
 	go pruneLoop()
 	return nil
 }
 
-func sendBeacons(port int) {
-	// Multicast is the intended transport; limited broadcast is a pragmatic
-	// fallback because some Windows setups drop looped-back multicast.
-	var destinations = []*net.UDPAddr{
-		{IP: net.ParseIP(multicastGroup), Port: port},
-		{IP: net.IPv4bcast, Port: port},
-	}
-	var conns []*net.UDPConn
-	for _, dst := range destinations {
-		var conn, err = net.DialUDP("udp4", nil, dst)
-		if err != nil {
-			log.Println("beacon send disabled for", dst.IP, ":", err)
-			continue
-		}
-		defer conn.Close()
-		conns = append(conns, conn)
-	}
-	if len(conns) == 0 {
-		return
-	}
-
+// sendBeacons writes from the same socket that receives beacons. Sending from
+// port 7802 keeps Windows Firewall's stateful mapping consistent and avoids a
+// separate ephemeral socket per interface.
+func sendBeacons(conn *net.UDPConn, port int) {
 	var ticker = time.NewTicker(beaconInterval)
 	defer ticker.Stop()
 	for {
 		var payload, err = json.Marshal(currentBeacon())
 		if err == nil {
-			for _, conn := range conns {
-				if _, err = conn.Write(payload); err != nil {
-					log.Println("beacon send error:", err)
+			for _, dst := range beaconDestinations(port) {
+				if _, werr := conn.WriteToUDP(payload, dst); werr == nil {
+					beaconsSent.Add(1)
 				}
 			}
+			// Unicast beacons keep discovered peers warm even when broadcast
+			// or multicast is filtered by the AP/driver.
+			sendUnicastBeacons(conn, payload)
 		}
 		<-ticker.C
+	}
+}
+
+// beaconDestinations returns the multicast group, limited broadcast, and the
+// directed broadcast address of every usable IPv4 interface.
+func beaconDestinations(port int) []*net.UDPAddr {
+	var out []*net.UDPAddr
+	var seen = map[string]bool{}
+	var add = func(ip net.IP) {
+		if ip == nil {
+			return
+		}
+		var key = ip.String()
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, &net.UDPAddr{IP: ip, Port: port})
+	}
+	add(net.ParseIP(multicastGroup))
+	add(net.IPv4bcast)
+	for _, ifc := range ipv4Interfaces() {
+		add(directedBroadcast(ifc.ip, ifc.mask))
+	}
+	return out
+}
+
+type iface4 struct {
+	ip   net.IP
+	mask net.IPMask
+}
+
+func ipv4Interfaces() []iface4 {
+	var out []iface4
+	var ifaces, err = net.Interfaces()
+	if err != nil {
+		return out
+	}
+	for _, ifi := range ifaces {
+		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		var addrs, aerr = ifi.Addrs()
+		if aerr != nil {
+			continue
+		}
+		for _, a := range addrs {
+			var ipnet, ok = a.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			var ip4 = ipnet.IP.To4()
+			if ip4 == nil || ip4.IsLinkLocalUnicast() || ip4.IsLoopback() {
+				continue
+			}
+			out = append(out, iface4{ip: ip4, mask: ipnet.Mask})
+		}
+	}
+	return out
+}
+
+func directedBroadcast(ip net.IP, mask net.IPMask) net.IP {
+	var ip4 = ip.To4()
+	if ip4 == nil {
+		return nil
+	}
+	var m = mask
+	if len(m) == 16 {
+		m = m[12:]
+	}
+	if len(m) != 4 {
+		return nil
+	}
+	var b = make(net.IP, 4)
+	for i := 0; i < 4; i++ {
+		b[i] = ip4[i] | ^m[i]
+	}
+	return b
+}
+
+func sendUnicastBeacons(conn *net.UDPConn, payload []byte) {
+	for _, p := range listPeers() {
+		if p.Address == "" {
+			continue
+		}
+		var host, _, err = net.SplitHostPort(p.Address)
+		if err != nil {
+			continue
+		}
+		var ip = net.ParseIP(host)
+		if ip == nil {
+			continue
+		}
+		var dst = &net.UDPAddr{IP: ip, Port: discoveryPort}
+		if _, werr := conn.WriteToUDP(payload, dst); werr == nil {
+			beaconsSent.Add(1)
+		}
 	}
 }
 
@@ -135,6 +244,8 @@ func readBeacons(conn *net.UDPConn) {
 		if msg.Port <= 0 || msg.Port > 65535 {
 			continue
 		}
+		beaconsReceived.Add(1)
+		lastBeaconMs.Store(time.Now().UnixMilli())
 		var address = net.JoinHostPort(src.IP.String(), strconv.Itoa(msg.Port))
 		var paired = false
 		if k, ok := getKnot(msg.NodeID); ok {

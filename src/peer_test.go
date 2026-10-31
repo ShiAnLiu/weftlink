@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"testing"
 	"time"
 )
@@ -76,5 +77,42 @@ func TestBeaconMessageRoundTrip(t *testing.T) {
 	}
 	if msg.Fingerprint != localNode.fingerprint {
 		t.Errorf("beacon fingerprint = %q, want %q", msg.Fingerprint, localNode.fingerprint)
+	}
+}
+
+func TestDirectedBroadcast(t *testing.T) {
+	var cases = []struct {
+		ip   string
+		bits int
+		want string
+	}{
+		{"192.168.3.107", 24, "192.168.3.255"},
+		{"192.168.3.107", 16, "192.168.255.255"},
+		{"10.0.0.5", 8, "10.255.255.255"},
+	}
+	for _, c := range cases {
+		var got = directedBroadcast(net.ParseIP(c.ip).To4(), net.CIDRMask(c.bits, 32))
+		if got == nil || got.String() != c.want {
+			t.Errorf("directedBroadcast(%s/%d) = %v, want %s", c.ip, c.bits, got, c.want)
+		}
+	}
+}
+
+func TestBeaconDestinationsIncludeBcastAndMulticast(t *testing.T) {
+	var dsts = beaconDestinations(discoveryPort)
+	var hasBcast, hasGroup bool
+	for _, dst := range dsts {
+		if dst.IP.Equal(net.IPv4bcast) {
+			hasBcast = true
+		}
+		if dst.IP.Equal(net.ParseIP(multicastGroup)) {
+			hasGroup = true
+		}
+	}
+	if !hasBcast {
+		t.Error("destinations missing limited broadcast")
+	}
+	if !hasGroup {
+		t.Error("destinations missing multicast group")
 	}
 }

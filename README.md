@@ -35,6 +35,13 @@ Pairing is mutual: one side runs `weftlink knot` to print a code, the other
 runs `weftlink knot <code>`. The code expires after two minutes and is
 single-use. If discovery is unavailable, pass `--peer <ip[:port]>`.
 
+## Desktop clients (C++/Qt)
+
+`clients/cpp` provides two desktop front-ends sharing one Qt 6 Weft client:
+a Qt Widgets GUI (`weftlink-gui`) and a full-screen ANSI TUI (`weftlink-tui`).
+Both show node identity, discovery counters, peers, pairing and Ping RTT.
+Build/deploy instructions: [`clients/cpp/README.md`](clients/cpp/README.md).
+
 ## Directory Layout
 
 ```
@@ -47,6 +54,7 @@ weftlink/
 ├─ protocol/       # Spec, schema (YAML), conformance vectors (JSON)
 ├─ gen/            # Generated types (go/dart/arkts) — committed, CI-verified
 ├─ clients/
+│  ├─ cpp/         # C++/Qt 6 desktop GUI + ANSI TUI (ADR-0002)
 │  ├─ flutter/     # Dart/Flutter UI + core_client package
 │  └─ harmony/     # ArkTS thin client
 ├─ tools/gen/      # Schema -> multi-language type generator

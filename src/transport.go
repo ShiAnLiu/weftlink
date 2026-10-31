@@ -152,15 +152,20 @@ type helloAck struct {
 }
 
 type statusResponse struct {
-	Type        string `json:"type"`
-	NodeID      string `json:"node_id"`
-	DisplayName string `json:"display_name"`
-	Role        string `json:"role"`
-	Version     string `json:"version"`
-	Fingerprint string `json:"fingerprint"`
-	Peers       []Peer `json:"peers"`
-	PeerCount   int    `json:"peer_count"`
-	PairedCount int    `json:"paired_count"`
+	Type            string `json:"type"`
+	NodeID          string `json:"node_id"`
+	DisplayName     string `json:"display_name"`
+	Role            string `json:"role"`
+	Version         string `json:"version"`
+	Fingerprint     string `json:"fingerprint"`
+	Peers           []Peer `json:"peers"`
+	PeerCount       int    `json:"peer_count"`
+	PairedCount     int    `json:"paired_count"`
+	DiscoveryPort   int    `json:"discovery_port"`
+	DiscoveryActive bool   `json:"discovery_active"`
+	BeaconsSent     int64  `json:"beacons_sent"`
+	BeaconsReceived int64  `json:"beacons_received"`
+	LastBeaconMs    int64  `json:"last_beacon_ms"`
 }
 
 type peersResponse struct {
@@ -222,16 +227,22 @@ func handleRequest(remote net.Addr, payload []byte) ([]byte, error) {
 		}
 	case "status":
 		var peers = listPeers()
+		var discovery = currentDiscoveryState()
 		resp = statusResponse{
-			Type:        "status",
-			NodeID:      localNode.nodeID,
-			DisplayName: localNode.displayName,
-			Role:        "warp",
-			Version:     localNode.version,
-			Fingerprint: localNode.fingerprint,
-			Peers:       peers,
-			PeerCount:   len(peers),
-			PairedCount: pairedPeerCount(),
+			Type:            "status",
+			NodeID:          localNode.nodeID,
+			DisplayName:     localNode.displayName,
+			Role:            "warp",
+			Version:         localNode.version,
+			Fingerprint:     localNode.fingerprint,
+			Peers:           peers,
+			PeerCount:       len(peers),
+			PairedCount:     pairedPeerCount(),
+			DiscoveryPort:   discovery.Port,
+			DiscoveryActive: discovery.Active,
+			BeaconsSent:     discovery.Sent,
+			BeaconsReceived: discovery.Received,
+			LastBeaconMs:    discovery.LastReceivedMs,
 		}
 	case "peers":
 		resp = peersResponse{Type: "peers", Peers: listPeers()}
