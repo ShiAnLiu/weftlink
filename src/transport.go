@@ -124,6 +124,13 @@ func handleConn(conn net.Conn) {
 			}
 			continue
 		}
+		if json.Unmarshal(payload, &head) == nil && head.Type == "exec_request" {
+			if err = handleExecRequest(conn, payload); err != nil {
+				log.Println("exec request error:", err)
+				return
+			}
+			continue
+		}
 		var resp []byte
 		resp, err = handleRequest(conn.RemoteAddr(), payload)
 		if err != nil {
@@ -144,17 +151,23 @@ func handleConn(conn net.Conn) {
 // request is the union of all daemon control verbs. Keeping one struct keeps
 // the dispatcher small; unknown fields are ignored by encoding/json.
 type request struct {
-	Type           string       `json:"type"`
-	Code           string       `json:"code"`
-	Host           string       `json:"host"`
-	Nonce          string       `json:"nonce"`
-	TS             int64        `json:"ts"`
-	Node           pairNodeWire `json:"node"`
-	Peer           string       `json:"peer"`
-	Path           string       `json:"path"`
-	Dir            string       `json:"dir"`
-	From           string       `json:"from"`
-	TimeoutSeconds int          `json:"timeout_seconds"`
+	Type            string       `json:"type"`
+	Code            string       `json:"code"`
+	Host            string       `json:"host"`
+	Nonce           string       `json:"nonce"`
+	TS              int64        `json:"ts"`
+	Node            pairNodeWire `json:"node"`
+	Peer            string       `json:"peer"`
+	Path            string       `json:"path"`
+	Dir             string       `json:"dir"`
+	From            string       `json:"from"`
+	TimeoutSeconds  int          `json:"timeout_seconds"`
+	ExecID          string       `json:"exec_id"`
+	Command         string       `json:"command"`
+	Text            string       `json:"text"`
+	Mime            string       `json:"mime"`
+	FromNodeID      string       `json:"from_node_id"`
+	FromFingerprint string       `json:"from_fingerprint"`
 }
 
 type helloAck struct {
@@ -259,6 +272,66 @@ type recvWaitResponse struct {
 type recvCancelResponse struct {
 	Type string `json:"type"`
 	OK   bool   `json:"ok"`
+}
+
+type runCommandResponse struct {
+	Type     string `json:"type"`
+	OK       bool   `json:"ok"`
+	ExitCode int    `json:"exit_code"`
+	Stdout   string `json:"stdout,omitempty"`
+	Stderr   string `json:"stderr,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+type execRequestsResponse struct {
+	Type     string            `json:"type"`
+	OK       bool              `json:"ok"`
+	Requests []execRequestInfo `json:"requests"`
+	Error    string            `json:"error,omitempty"`
+}
+
+type execActionResponse struct {
+	Type  string `json:"type"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
+type clipboardBeginResponse struct {
+	Type             string `json:"type"`
+	OK               bool   `json:"ok"`
+	From             string `json:"from,omitempty"`
+	ExpiresInSeconds int    `json:"expires_in_seconds,omitempty"`
+	Error            string `json:"error,omitempty"`
+}
+
+type clipboardStateResponse struct {
+	Type             string `json:"type"`
+	OK               bool   `json:"ok"`
+	Active           bool   `json:"active"`
+	From             string `json:"from,omitempty"`
+	ExpiresInSeconds int    `json:"expires_in_seconds,omitempty"`
+}
+
+type clipboardResultResponse struct {
+	Type   string `json:"type"`
+	OK     bool   `json:"ok"`
+	Length int    `json:"length,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+type clipboardAckResponse struct {
+	Type   string `json:"type"`
+	OK     bool   `json:"ok"`
+	Length int    `json:"length,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+type clipboardContentResponse struct {
+	Type  string `json:"type"`
+	OK    bool   `json:"ok"`
+	Text  string `json:"text,omitempty"`
+	Mime  string `json:"mime,omitempty"`
+	Error string `json:"error,omitempty"`
 }
 
 func handleRequest(remote net.Addr, payload []byte) ([]byte, error) {
@@ -398,6 +471,109 @@ func handleRequest(remote net.Addr, payload []byte) ([]byte, error) {
 	case "recv_cancel":
 		cancelReceive()
 		resp = recvCancelResponse{Type: "recv_cancelled", OK: true}
+	case "run_command":
+		var result execResultMessage
+		result, err = runRemoteCommand(req.Peer, req.Command, req.TimeoutSeconds)
+		if err != nil {
+			resp = runCommandResponse{Type: "run_result", OK: false, Error: err.Error()}
+			break
+		}
+		resp = runCommandResponse{
+			Type:     "run_result",
+			OK:       result.OK,
+			ExitCode: result.ExitCode,
+			Stdout:   result.Stdout,
+			Stderr:   result.Stderr,
+			Error:    result.Error,
+		}
+	case "exec_requests":
+		resp = execRequestsResponse{
+			Type:     "exec_requests",
+			OK:       true,
+			Requests: listPendingExecs(),
+		}
+	case "exec_approve":
+		if err = decideExec(req.ExecID, true); err != nil {
+			resp = execActionResponse{Type: "exec_action", OK: false, Error: err.Error()}
+			break
+		}
+		resp = execActionResponse{Type: "exec_action", OK: true}
+	case "exec_deny":
+		if err = decideExec(req.ExecID, false); err != nil {
+			resp = execActionResponse{Type: "exec_action", OK: false, Error: err.Error()}
+			break
+		}
+		resp = execActionResponse{Type: "exec_action", OK: true}
+	case "clipboard_update":
+		var length int
+		length, err = applyClipboardUpdate(req.Text, req.Mime, req.FromNodeID, req.FromFingerprint)
+		if err != nil {
+			resp = clipboardAckResponse{Type: "clipboard_ack", OK: false, Error: err.Error()}
+			break
+		}
+		resp = clipboardAckResponse{Type: "clipboard_ack", OK: true, Length: length}
+	case "clipboard_request":
+		var text, mime string
+		text, mime, err = handleClipboardRequest(req.FromNodeID, req.FromFingerprint)
+		if err != nil {
+			resp = clipboardContentResponse{Type: "clipboard_content", OK: false, Error: err.Error()}
+			break
+		}
+		resp = clipboardContentResponse{Type: "clipboard_content", OK: true, Text: text, Mime: mime}
+	case "clipboard_begin":
+		var fromID = req.From
+		if fromID != "" {
+			var k Knot
+			k, err = resolvePairedPeer(fromID)
+			if err != nil {
+				resp = clipboardBeginResponse{Type: "clipboard_begin", OK: false, Error: err.Error()}
+				break
+			}
+			fromID = k.PeerID
+		}
+		var until time.Time
+		until, err = beginClipboard(fromID, time.Duration(req.TimeoutSeconds)*time.Second)
+		if err != nil {
+			resp = clipboardBeginResponse{Type: "clipboard_begin", OK: false, Error: err.Error()}
+			break
+		}
+		resp = clipboardBeginResponse{
+			Type:             "clipboard_begin",
+			OK:               true,
+			From:             fromID,
+			ExpiresInSeconds: int(time.Until(until).Seconds()),
+		}
+	case "clipboard_end":
+		cancelClipboard()
+		resp = clipboardBeginResponse{Type: "clipboard_end", OK: true}
+	case "clipboard_state":
+		var active bool
+		var from string
+		var left int
+		active, from, left = clipboardStatus()
+		resp = clipboardStateResponse{
+			Type:             "clipboard_state",
+			OK:               true,
+			Active:           active,
+			From:             from,
+			ExpiresInSeconds: left,
+		}
+	case "clipboard_push":
+		var length int
+		length, err = pushClipboardToPeer(req.Peer)
+		if err != nil {
+			resp = clipboardResultResponse{Type: "clipboard_result", OK: false, Error: err.Error()}
+			break
+		}
+		resp = clipboardResultResponse{Type: "clipboard_result", OK: true, Length: length}
+	case "clipboard_pull":
+		var length int
+		length, err = pullClipboardFromPeer(req.Peer)
+		if err != nil {
+			resp = clipboardResultResponse{Type: "clipboard_result", OK: false, Error: err.Error()}
+			break
+		}
+		resp = clipboardResultResponse{Type: "clipboard_result", OK: true, Length: length}
 	default:
 		resp = errorResponse{Type: "error", Message: "unknown type: " + req.Type}
 	}

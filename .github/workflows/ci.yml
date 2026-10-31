@@ -157,7 +157,7 @@ jobs:
         run: ctest --test-dir build/qt --output-on-failure
 
   transfer:
-    name: File transfer (two daemons)
+    name: M2 e2e (two daemons)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -204,6 +204,23 @@ jobs:
           cat /tmp/weftlink-recv.log
           cmp /tmp/payload.bin /tmp/weftlink-recv/payload.bin
           ./bin/weftlink status ci-b --port 7821 | grep -q "remote peer"
+
+          ./bin/weftlink run ci-b "echo run-ok" --port 7821 > /tmp/weftlink-run.log 2>&1 &
+          run_pid=$!
+          exec_id=""
+          for i in $(seq 1 20); do
+            exec_id=$(./bin/weftlink requests --port 7831 --json \
+              | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r[0]["exec_id"] if r else "")')
+            if [ -n "$exec_id" ]; then
+              break
+            fi
+            sleep 0.5
+          done
+          test -n "$exec_id"
+          ./bin/weftlink approve "$exec_id" --port 7831
+          wait "$run_pid"
+          grep -q "run-ok" /tmp/weftlink-run.log
+          ./bin/weftlink requests --port 7831 | grep -q "no pending exec requests"
 
   cli:
     name: CLI (build + smoke)
@@ -332,14 +349,14 @@ jobs:
           cat /tmp/weftlinkd.log
           exit 1
 
-      - name: core_client — pub get / analyze / test
+      - name: core_client 鈥?pub get / analyze / test
         working-directory: clients/flutter/packages/core_client
         run: |
           flutter pub get
           dart analyze
           dart test
 
-      - name: app — pub get / analyze / test
+      - name: app 鈥?pub get / analyze / test
         working-directory: clients/flutter/app
         run: |
           flutter pub get

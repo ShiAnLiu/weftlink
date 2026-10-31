@@ -430,6 +430,313 @@ func cmdRecv(args []string) error {
 	return nil
 }
 
+func cmdRun(args []string) error {
+	var fs, g = newFlagSet("run")
+	var timeout = fs.Int("timeout", 30, "remote command timeout in seconds")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if fs.NArg() < 2 {
+		return fmt.Errorf("usage: weftlink run <peer> \"<command>\" [--timeout seconds]")
+	}
+	var peerArg = fs.Arg(0)
+	var command = strings.Join(fs.Args()[1:], " ")
+	if strings.TrimSpace(command) == "" {
+		return fmt.Errorf("command is empty")
+	}
+
+	var d, err = dialDaemon(g, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer d.close()
+
+	if !g.json {
+		fmt.Printf("Waiting for %s to approve: %s\n", peerArg, command)
+	}
+	var result runResult
+	var wait = 2*time.Minute + time.Duration(*timeout)*time.Second + 40*time.Second
+	err = d.call(map[string]any{
+		"type":            "run_command",
+		"peer":            peerArg,
+		"command":         command,
+		"timeout_seconds": *timeout,
+	}, &result, wait)
+	if err != nil {
+		return err
+	}
+	if g.json {
+		if printErr := printJSON(result); printErr != nil {
+			return printErr
+		}
+		if !result.OK {
+			return fmt.Errorf("%s", result.Error)
+		}
+		return nil
+	}
+	if result.Stdout != "" {
+		fmt.Println("--- stdout ---")
+		fmt.Print(result.Stdout)
+		if !strings.HasSuffix(result.Stdout, "\n") {
+			fmt.Println()
+		}
+	}
+	if result.Stderr != "" {
+		fmt.Println("--- stderr ---")
+		fmt.Print(result.Stderr)
+		if !strings.HasSuffix(result.Stderr, "\n") {
+			fmt.Println()
+		}
+	}
+	if !result.OK {
+		return fmt.Errorf("%s", result.Error)
+	}
+	fmt.Printf("exit code: %d\n", result.ExitCode)
+	return nil
+}
+
+func cmdRequests(args []string) error {
+	var fs, g = newFlagSet("requests")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noArgs(fs); err != nil {
+		return err
+	}
+	var d, err = dialDaemon(g, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer d.close()
+
+	var result execRequestsResult
+	if err = d.call(map[string]string{"type": "exec_requests"}, &result, 10*time.Second); err != nil {
+		return err
+	}
+	if !result.OK {
+		return fmt.Errorf("%s", result.Error)
+	}
+	if g.json {
+		return printJSON(result.Requests)
+	}
+	if len(result.Requests) == 0 {
+		fmt.Println("no pending exec requests")
+		return nil
+	}
+	var w = tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tPEER\tAGE\tCOMMAND")
+	for _, request := range result.Requests {
+		fmt.Fprintf(w, "%s\t%s\t%ds\t%s\n", request.ExecID, request.PeerID,
+			request.AgeSeconds, request.Command)
+	}
+	return w.Flush()
+}
+
+func cmdApprove(args []string) error {
+	return execDecision(args, true)
+}
+
+func cmdDeny(args []string) error {
+	return execDecision(args, false)
+}
+
+func execDecision(args []string, approve bool) error {
+	var name = "approve"
+	if !approve {
+		name = "deny"
+	}
+	var fs, g = newFlagSet(name)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("usage: weftlink %s <request-id>", name)
+	}
+	var d, err = dialDaemon(g, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer d.close()
+
+	var reqType = "exec_deny"
+	if approve {
+		reqType = "exec_approve"
+	}
+	var result execActionResult
+	if err = d.call(map[string]string{
+		"type":    reqType,
+		"exec_id": fs.Arg(0),
+	}, &result, 10*time.Second); err != nil {
+		return err
+	}
+	if !result.OK {
+		return fmt.Errorf("%s", result.Error)
+	}
+	if g.json {
+		return printJSON(result)
+	}
+	var past = "approved"
+	if !approve {
+		past = "denied"
+	}
+	fmt.Printf("%s: %s\n", past, fs.Arg(0))
+	return nil
+}
+
+func cmdClipboard(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: weftlink clipboard on|off|status|push|pull ...")
+	}
+	switch args[0] {
+	case "on":
+		return clipboardOn(args[1:])
+	case "off":
+		return clipboardOff(args[1:])
+	case "status":
+		return clipboardStateCmd(args[1:])
+	case "push":
+		return clipboardTransfer(args[1:], true)
+	case "pull":
+		return clipboardTransfer(args[1:], false)
+	default:
+		return fmt.Errorf("unknown clipboard action %q (on|off|status|push|pull)", args[0])
+	}
+}
+
+func clipboardOn(args []string) error {
+	var fs, g = newFlagSet("clipboard on")
+	var from = fs.String("from", "", "only accept clipboard from this paired peer")
+	var timeout = fs.Int("timeout", 600, "seconds to keep sync enabled")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noArgs(fs); err != nil {
+		return err
+	}
+	var d, dialErr = dialDaemon(g, 5*time.Second)
+	if dialErr != nil {
+		return dialErr
+	}
+	defer d.close()
+
+	var result clipboardBeginResult
+	var callErr = d.call(map[string]any{
+		"type":            "clipboard_begin",
+		"from":            *from,
+		"timeout_seconds": *timeout,
+	}, &result, 10*time.Second)
+	if callErr != nil {
+		return callErr
+	}
+	if !result.OK {
+		return fmt.Errorf("%s", result.Error)
+	}
+	if g.json {
+		return printJSON(result)
+	}
+	var source = "any paired peer"
+	if *from != "" {
+		source = *from
+	}
+	fmt.Printf("clipboard sync enabled for %s (%ds)\n", source, result.ExpiresInSeconds)
+	return nil
+}
+
+func clipboardOff(args []string) error {
+	var fs, g = newFlagSet("clipboard off")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noArgs(fs); err != nil {
+		return err
+	}
+	var d, err = dialDaemon(g, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer d.close()
+	var result clipboardBeginResult
+	if err = d.call(map[string]string{"type": "clipboard_end"}, &result, 10*time.Second); err != nil {
+		return err
+	}
+	if g.json {
+		return printJSON(result)
+	}
+	fmt.Println("clipboard sync disabled")
+	return nil
+}
+
+func clipboardStateCmd(args []string) error {
+	var fs, g = newFlagSet("clipboard status")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noArgs(fs); err != nil {
+		return err
+	}
+	var d, err = dialDaemon(g, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer d.close()
+	var result clipboardStateResult
+	if err = d.call(map[string]string{"type": "clipboard_state"}, &result, 10*time.Second); err != nil {
+		return err
+	}
+	if g.json {
+		return printJSON(result)
+	}
+	if !result.Active {
+		fmt.Println("clipboard sync is off")
+		return nil
+	}
+	var source = "any paired peer"
+	if result.From != "" {
+		source = result.From
+	}
+	fmt.Printf("clipboard sync on: %s (%ds left)\n", source, result.ExpiresInSeconds)
+	return nil
+}
+
+func clipboardTransfer(args []string, push bool) error {
+	var action = "pull"
+	if push {
+		action = "push"
+	}
+	var fs, g = newFlagSet("clipboard " + action)
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("usage: weftlink clipboard %s <peer>", action)
+	}
+	var d, err = dialDaemon(g, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer d.close()
+
+	var result clipboardResult
+	if err = d.call(map[string]string{
+		"type": "clipboard_" + action,
+		"peer": fs.Arg(0),
+	}, &result, 20*time.Second); err != nil {
+		return err
+	}
+	if !result.OK {
+		return fmt.Errorf("%s", result.Error)
+	}
+	if g.json {
+		return printJSON(result)
+	}
+	if push {
+		fmt.Printf("sent %d chars to %s\n", result.Length, fs.Arg(0))
+	} else {
+		fmt.Printf("received %d chars from %s\n", result.Length, fs.Arg(0))
+	}
+	return nil
+}
+
 func humanBytes(n int64) string {
 	const unit = int64(1024)
 	if n < unit {

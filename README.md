@@ -28,11 +28,18 @@ Use it:
 ./bin/weftlink status <peer>      # paired peer's status
 ./bin/weftlink recv --from <peer> # receiver opts in to one incoming file
 ./bin/weftlink send <peer> file   # sender transfers to that peer
+./bin/weftlink run <peer> "cmd"  # peer must approve (requests/approve)
+./bin/weftlink clipboard push <peer>   # receiver: clipboard on --from <peer>
 ```
 
 File transfer requires the receiver to run `weftlink recv` first; nothing is
 downloaded automatically. Received files land in `~/Downloads/Weftlink` unless
 `--dir` is given.
+
+Remote commands are queued for explicit approval on the target
+(`weftlink requests` then `weftlink approve <id>`); nothing runs automatically.
+Clipboard sync also requires the receiver to opt in with `weftlink clipboard on`.
+Clipboard read/write is currently implemented on Windows.
 
 State (node key, TLS cert, paired knots) lives in `~/.weftlink/`; set
 `WEFTLINK_HOME` to isolate it. Default ports: 7801 (Weft Protocol), 7802

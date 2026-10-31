@@ -89,6 +89,29 @@ export interface ClipboardUpdate {
   text: string;
   mime: string;
   ts: number;
+  from_node_id: string;
+  from_fingerprint: string;
+}
+
+/** Receiver's answer to a clipboard update */
+export interface ClipboardAck {
+  ok: boolean;
+  length: number;
+  error: string;
+}
+
+/** Ask a peer for its clipboard text */
+export interface ClipboardRequest {
+  from_node_id: string;
+  from_fingerprint: string;
+}
+
+/** Clipboard text returned by a peer */
+export interface ClipboardContent {
+  ok: boolean;
+  text: string;
+  mime: string;
+  error: string;
 }
 
 /** Remote command execution request */
@@ -97,5 +120,17 @@ export interface ExecRequest {
   command: string;
   cwd: string;
   timeout: number;
+  from_node_id: string;
+  from_fingerprint: string;
+}
+
+/** Remote command execution result */
+export interface ExecResult {
+  exec_id: string;
+  ok: boolean;
+  exit_code: number;
+  stdout: string;
+  stderr: string;
+  error: string;
 }
 

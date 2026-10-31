@@ -94,6 +94,29 @@ messages:
       text:  { type: string, required: true }
       mime:  { type: string, required: false, default: "text/plain" }
       ts:    { type: uint64, required: true, description: "unix timestamp ms" }
+      from_node_id:     { type: string, required: true }
+      from_fingerprint: { type: string, required: true }
+
+  ClipboardAck:
+    description: "Receiver's answer to a clipboard update"
+    fields:
+      ok:     { type: bool, required: true }
+      length: { type: uint32, required: false }
+      error:  { type: string, required: false }
+
+  ClipboardRequest:
+    description: "Ask a peer for its clipboard text"
+    fields:
+      from_node_id:     { type: string, required: true }
+      from_fingerprint: { type: string, required: true }
+
+  ClipboardContent:
+    description: "Clipboard text returned by a peer"
+    fields:
+      ok:    { type: bool, required: true }
+      text:  { type: string, required: false }
+      mime:  { type: string, required: false }
+      error: { type: string, required: false }
 
   ExecRequest:
     description: "Remote command execution request"
@@ -102,3 +125,15 @@ messages:
       command: { type: string, required: true }
       cwd:     { type: string, required: false }
       timeout: { type: uint32, required: false, description: "seconds, 0 = no limit" }
+      from_node_id:     { type: string, required: true }
+      from_fingerprint: { type: string, required: true }
+
+  ExecResult:
+    description: "Remote command execution result"
+    fields:
+      exec_id:   { type: string, required: true }
+      ok:        { type: bool, required: true }
+      exit_code: { type: uint32, required: true }
+      stdout:    { type: string, required: false }
+      stderr:    { type: string, required: false }
+      error:     { type: string, required: false }

@@ -66,7 +66,15 @@ Last updated: 2026-10-31
   文件名消毒/去重。两台本地 daemon（7821/7831）端到端传输 + 校验已跑通。
 - ✅ **远程 status**：`weftlink status <peer>` 经 `peer_status` 控制动词读取对方的
   节点/peers/发现计数；仅限已配对 peer。
-- ⏳ 待办：clipboard 同步、run 远程命令（需显式批准/超时），以及 C++/Qt 客户端接入。
+- ✅ **run 远程命令**：`weftlink run <peer> "cmd"` 在对方排队，必须由对方
+  `weftlink requests` + `weftlink approve <id>` 显式批准后才执行；2 分钟审批窗口，
+  默认 30s / 最大 5m 执行超时，stdout/stderr 各限 64 KiB，deny/timeout 有明确回执。
+- ✅ **clipboard 同步**：接收端 `weftlink clipboard on --from <peer>` 显式开启窗口；
+  `clipboard push/pull <peer>` 经加密通道交换文本，仅限已配对 peer。Windows 使用
+  `golang.design/x/clipboard`，其他平台暂为 stub（返回 not implemented）。
+- ✅ 本地双 daemon 端到端已验证：文件 send/recv + SHA-256、远程 status、run 批准执行、
+  clipboard push/pull（Windows）。
+- ⏳ 待办：两台真机 Windows 复测 M2；C++/Qt 客户端接入 send/recv/run/clipboard。
 
 ## 桌面客户端（C++/Qt，新增）
 
@@ -82,7 +90,7 @@ Last updated: 2026-10-31
 
 | 套件 | 数量 | 命令 |
 |------|------|------|
-| Go 单元/集成 | 41 | `go test ./...` |
+| Go 单元/集成 | 47 | `go test ./...` |
 | Dart core_client | 2 | `dart test` |
 | Flutter app | 3 | `flutter test` |
 | C++/Qt | 6 | `ctest --test-dir build/qt` |
@@ -90,7 +98,7 @@ Last updated: 2026-10-31
 
 ## CI/CD
 
-- **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ 文件传输双 daemon 端到端（配对→recv→send→校验）+ C++/Qt（Linux/Windows 构建 + CTest + TUI `--check`）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
+- **CI**：三平台 Go（build/vet/test/gofmt，Linux 额外 `-race`）+ CLI（build + up/status/ls/ping/knot 冒烟）+ M2 双 daemon 端到端（配对→recv→send→校验→远程 status→run 审批执行）+ C++/Qt（Linux/Windows 构建 + CTest + TUI `--check`）+ Dart（analysis/test）+ Flutter（analyze/test）+ schema/gen 一致性 + conformance JSON 校验；daemon 依赖测试启动前做就绪探测，CI 中不再允许静默跳过
 - **CD**：tag `v*` → 先跑 vet/test/gen 门禁 → 交叉编译 `weftlinkd` 与 `weftlink`（windows/linux/darwin × amd64/arm64）→ SHA256SUMS → GitHub Release；tag 版本号通过 `-X main.productVersion` / `-X main.version` 注入
 - 已发布：v0.1.0、v0.2.0、v0.3.0、v0.4.0（CLI + 发现/配对 + 桌面 UI + 开箱即用压缩包）
 

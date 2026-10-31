@@ -97,6 +97,60 @@ type recvWaitResult struct {
 	Error      string `json:"error"`
 }
 
+type execRequestInfo struct {
+	ExecID     string `json:"exec_id"`
+	PeerID     string `json:"peer_id"`
+	Command    string `json:"command"`
+	Cwd        string `json:"cwd"`
+	CreatedMs  int64  `json:"created_ms"`
+	AgeSeconds int    `json:"age_seconds"`
+}
+
+type execRequestsResult struct {
+	Type     string            `json:"type"`
+	OK       bool              `json:"ok"`
+	Requests []execRequestInfo `json:"requests"`
+	Error    string            `json:"error"`
+}
+
+type execActionResult struct {
+	Type  string `json:"type"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error"`
+}
+
+type runResult struct {
+	Type     string `json:"type"`
+	OK       bool   `json:"ok"`
+	ExitCode int    `json:"exit_code"`
+	Stdout   string `json:"stdout"`
+	Stderr   string `json:"stderr"`
+	Error    string `json:"error"`
+}
+
+type clipboardBeginResult struct {
+	Type             string `json:"type"`
+	OK               bool   `json:"ok"`
+	From             string `json:"from"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
+	Error            string `json:"error"`
+}
+
+type clipboardStateResult struct {
+	Type             string `json:"type"`
+	OK               bool   `json:"ok"`
+	Active           bool   `json:"active"`
+	From             string `json:"from"`
+	ExpiresInSeconds int    `json:"expires_in_seconds"`
+}
+
+type clipboardResult struct {
+	Type   string `json:"type"`
+	OK     bool   `json:"ok"`
+	Length int    `json:"length"`
+	Error  string `json:"error"`
+}
+
 type daemonClient struct {
 	client *proto.Client
 }

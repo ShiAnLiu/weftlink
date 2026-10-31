@@ -91,15 +91,50 @@ type FileDone struct {
 
 // ClipboardUpdate — Clipboard content synchronization
 type ClipboardUpdate struct {
-	Text string `json:"text"`
-	Mime string `json:"mime"`
-	Ts   uint64 `json:"ts"` // unix timestamp ms
+	Text            string `json:"text"`
+	Mime            string `json:"mime"`
+	Ts              uint64 `json:"ts"` // unix timestamp ms
+	FromNodeId      string `json:"from_node_id"`
+	FromFingerprint string `json:"from_fingerprint"`
+}
+
+// ClipboardAck — Receiver's answer to a clipboard update
+type ClipboardAck struct {
+	Ok     bool   `json:"ok"`
+	Length uint32 `json:"length"`
+	Error  string `json:"error"`
+}
+
+// ClipboardRequest — Ask a peer for its clipboard text
+type ClipboardRequest struct {
+	FromNodeId      string `json:"from_node_id"`
+	FromFingerprint string `json:"from_fingerprint"`
+}
+
+// ClipboardContent — Clipboard text returned by a peer
+type ClipboardContent struct {
+	Ok    bool   `json:"ok"`
+	Text  string `json:"text"`
+	Mime  string `json:"mime"`
+	Error string `json:"error"`
 }
 
 // ExecRequest — Remote command execution request
 type ExecRequest struct {
-	ExecId  string `json:"exec_id"`
-	Command string `json:"command"`
-	Cwd     string `json:"cwd"`
-	Timeout uint32 `json:"timeout"` // seconds, 0 = no limit
+	ExecId          string `json:"exec_id"`
+	Command         string `json:"command"`
+	Cwd             string `json:"cwd"`
+	Timeout         uint32 `json:"timeout"` // seconds, 0 = no limit
+	FromNodeId      string `json:"from_node_id"`
+	FromFingerprint string `json:"from_fingerprint"`
+}
+
+// ExecResult — Remote command execution result
+type ExecResult struct {
+	ExecId   string `json:"exec_id"`
+	Ok       bool   `json:"ok"`
+	ExitCode uint32 `json:"exit_code"`
+	Stdout   string `json:"stdout"`
+	Stderr   string `json:"stderr"`
+	Error    string `json:"error"`
 }

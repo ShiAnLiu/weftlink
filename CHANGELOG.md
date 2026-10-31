@@ -10,6 +10,14 @@
   file names, `.part` temp file + atomic rename.
 - **Remote status**: `weftlink status <peer>` queries a paired peer's daemon
   through the `peer_status` control verb.
+- **Remote execution (M2)**: `weftlink run <peer> "<command>"` queues an
+  `ExecRequest` on the peer; it only runs after a local `weftlink requests` /
+  `weftlink approve <id>` (2-minute approval window, per-request timeout,
+  capped stdout/stderr, explicit deny/timeout results). `requests`, `approve`
+  and `deny` control verbs are included.
+- **Clipboard (M2)**: `weftlink clipboard on|off|status|push|pull` with a
+  time-limited receiver opt-in, paired-only TLS transfer, and Windows clipboard
+  support via `golang.design/x/clipboard` (other platforms are stubs for now).
 - **C++/Qt desktop clients** (`clients/cpp`): shared Qt 6 `weftclient`
   (`QSslSocket` TLS + Weft framing), a Qt Widgets GUI and a full-screen ANSI
   TUI. Both show node identity, discovery counters, peers, pairing and Ping

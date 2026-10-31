@@ -306,23 +306,106 @@ class ClipboardUpdate {
   final String text;
   final String mime;
   final int ts;
+  final String from_node_id;
+  final String from_fingerprint;
 
   ClipboardUpdate({
     required this.text,
     required this.mime,
     required this.ts,
+    required this.from_node_id,
+    required this.from_fingerprint,
   });
 
   factory ClipboardUpdate.fromJson(Map<String, dynamic> j) => ClipboardUpdate(
     text: j['text'],
     mime: j['mime'],
     ts: j['ts'],
+    from_node_id: j['from_node_id'],
+    from_fingerprint: j['from_fingerprint'],
   );
 
   Map<String, dynamic> toJson() => {
     'text': text,
     'mime': mime,
     'ts': ts,
+    'from_node_id': from_node_id,
+    'from_fingerprint': from_fingerprint,
+  };
+}
+
+/// Receiver's answer to a clipboard update
+class ClipboardAck {
+  final bool ok;
+  final int length;
+  final String error;
+
+  ClipboardAck({
+    required this.ok,
+    required this.length,
+    required this.error,
+  });
+
+  factory ClipboardAck.fromJson(Map<String, dynamic> j) => ClipboardAck(
+    ok: j['ok'],
+    length: j['length'],
+    error: j['error'],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'ok': ok,
+    'length': length,
+    'error': error,
+  };
+}
+
+/// Ask a peer for its clipboard text
+class ClipboardRequest {
+  final String from_node_id;
+  final String from_fingerprint;
+
+  ClipboardRequest({
+    required this.from_node_id,
+    required this.from_fingerprint,
+  });
+
+  factory ClipboardRequest.fromJson(Map<String, dynamic> j) => ClipboardRequest(
+    from_node_id: j['from_node_id'],
+    from_fingerprint: j['from_fingerprint'],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'from_node_id': from_node_id,
+    'from_fingerprint': from_fingerprint,
+  };
+}
+
+/// Clipboard text returned by a peer
+class ClipboardContent {
+  final bool ok;
+  final String text;
+  final String mime;
+  final String error;
+
+  ClipboardContent({
+    required this.ok,
+    required this.text,
+    required this.mime,
+    required this.error,
+  });
+
+  factory ClipboardContent.fromJson(Map<String, dynamic> j) => ClipboardContent(
+    ok: j['ok'],
+    text: j['text'],
+    mime: j['mime'],
+    error: j['error'],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'ok': ok,
+    'text': text,
+    'mime': mime,
+    'error': error,
   };
 }
 
@@ -332,12 +415,16 @@ class ExecRequest {
   final String command;
   final String cwd;
   final int timeout;
+  final String from_node_id;
+  final String from_fingerprint;
 
   ExecRequest({
     required this.exec_id,
     required this.command,
     required this.cwd,
     required this.timeout,
+    required this.from_node_id,
+    required this.from_fingerprint,
   });
 
   factory ExecRequest.fromJson(Map<String, dynamic> j) => ExecRequest(
@@ -345,6 +432,8 @@ class ExecRequest {
     command: j['command'],
     cwd: j['cwd'],
     timeout: j['timeout'],
+    from_node_id: j['from_node_id'],
+    from_fingerprint: j['from_fingerprint'],
   );
 
   Map<String, dynamic> toJson() => {
@@ -352,6 +441,45 @@ class ExecRequest {
     'command': command,
     'cwd': cwd,
     'timeout': timeout,
+    'from_node_id': from_node_id,
+    'from_fingerprint': from_fingerprint,
+  };
+}
+
+/// Remote command execution result
+class ExecResult {
+  final String exec_id;
+  final bool ok;
+  final int exit_code;
+  final String stdout;
+  final String stderr;
+  final String error;
+
+  ExecResult({
+    required this.exec_id,
+    required this.ok,
+    required this.exit_code,
+    required this.stdout,
+    required this.stderr,
+    required this.error,
+  });
+
+  factory ExecResult.fromJson(Map<String, dynamic> j) => ExecResult(
+    exec_id: j['exec_id'],
+    ok: j['ok'],
+    exit_code: j['exit_code'],
+    stdout: j['stdout'],
+    stderr: j['stderr'],
+    error: j['error'],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'exec_id': exec_id,
+    'ok': ok,
+    'exit_code': exit_code,
+    'stdout': stdout,
+    'stderr': stderr,
+    'error': error,
   };
 }
 

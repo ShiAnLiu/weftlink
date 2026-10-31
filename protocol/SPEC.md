@@ -49,6 +49,12 @@ from the node-to-node message types above.
 | `{"type":"recv_begin","dir":"...","from":"...","timeout_seconds":300}` | `recv_begin`: `ok`, `dir`, `timeout_seconds`, `error` |
 | `{"type":"recv_wait","timeout_seconds":300}` | `recv_result`: `ok`, `path`, `name`, `size`, `checksum`, `from_node_id`, `error` |
 | `{"type":"recv_cancel"}`   | `recv_cancelled`                                            |
+| `{"type":"run_command","peer":"...","command":"...","timeout_seconds":30}` | `run_result`: `ok`, `exit_code`, `stdout`, `stderr`, `error` |
+| `{"type":"exec_requests"}` | `exec_requests`: pending request list                       |
+| `{"type":"exec_approve","exec_id":"..."}` / `exec_deny` | `exec_action`: `ok`, `error` |
+| `{"type":"clipboard_begin","from":"...","timeout_seconds":600}` | `clipboard_begin`: `ok`, `from`, `expires_in_seconds` |
+| `{"type":"clipboard_end"}` / `clipboard_state` | off / current policy                   |
+| `{"type":"clipboard_push","peer":"..."}` / `clipboard_pull` | `clipboard_result`: `ok`, `length`, `error` |
 
 A `Peer` has: `peer_id`, `display_name`, `role`, `version`, `address`,
 `fingerprint`, `last_seen` (unix ms), `paired`.
@@ -103,6 +109,52 @@ Flow (all on one TLS connection, pairs only):
 
 Remote status uses the control verb `peer_status` (paired peers only) and
 returns the remote daemon's normal `status` payload.
+
+## Remote Execution (M2)
+
+Execution is never automatic. A paired sender runs:
+
+```sh
+weftlink run <peer> "command"
+```
+
+The sender daemon sends `ExecRequest` (id, command, timeout, sender identity)
+over TLS. The receiver daemon verifies the sender is a paired knot, replies
+`exec_pending`, and keeps the connection open for up to 2 minutes. The peer
+user lists and approves it locally:
+
+```sh
+weftlink requests
+weftlink approve <exec-id>   # or: weftlink deny <exec-id>
+```
+
+On approval the receiver runs the command with a per-request timeout (default
+30s, max 5m), captures stdout/stderr (capped at 64 KiB each), and sends
+`ExecResult` (exit code, output, error) back on the same connection. Denials
+and approval timeouts return an error result. Only approved commands execute.
+
+## Clipboard (M2)
+
+The receiver opts in for a time window:
+
+```sh
+weftlink clipboard on --from <peer> --timeout 600
+weftlink clipboard status
+weftlink clipboard off
+```
+
+Then either side can push or pull text:
+
+```sh
+weftlink clipboard push <peer>   # local -> peer
+weftlink clipboard pull <peer>   # peer -> local
+```
+
+`ClipboardUpdate` / `ClipboardAck` and `ClipboardRequest` / `ClipboardContent`
+carry the text over TLS. Only paired peers are accepted, the receiver's policy
+must be active (and match `--from`), and no clipboard text is written to logs.
+The current build implements clipboard read/write on Windows; other platforms
+return "not implemented" until their backends land.
 
 ## LAN Discovery
 

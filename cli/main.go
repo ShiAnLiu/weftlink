@@ -27,6 +27,11 @@ Commands:
   knot [code]        Pair with a peer; without a code, print a new pair code
   send <peer> <file> Send a file to a paired peer
   recv [flags]       Wait for one incoming file (receiver must opt in first)
+  run <peer> <cmd>   Request a remote command (peer must approve)
+  requests           List pending remote command requests on this daemon
+  approve <id>       Approve and run a pending remote command
+  deny <id>          Reject a pending remote command
+  clipboard ...      on/off/status/push/pull clipboard sync
   version            Print version information
   help               Show this help
 
@@ -157,6 +162,16 @@ func main() {
 		err = cmdSend(args)
 	case "recv":
 		err = cmdRecv(args)
+	case "run":
+		err = cmdRun(args)
+	case "requests":
+		err = cmdRequests(args)
+	case "approve":
+		err = cmdApprove(args)
+	case "deny":
+		err = cmdDeny(args)
+	case "clipboard":
+		err = cmdClipboard(args)
 	default:
 		fmt.Fprintf(os.Stderr, "weftlink: unknown command %q\n\n", cmd)
 		printUsage(os.Stderr)
