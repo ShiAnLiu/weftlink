@@ -9,6 +9,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Widgets Test)
 qt_standard_project_setup()
 
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Qt 6.7 + GCC 13: the _Float16 variable-template specialization in
+    # qcomparehelpers.h lands in multiple TUs and clashes at link time.
+    add_link_options(-Wl,--allow-multiple-definition)
+endif()
+
 if (MSVC)
     add_compile_options(/utf-8)
 endif()
