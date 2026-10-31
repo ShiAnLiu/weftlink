@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -105,7 +106,7 @@ func clipboardStatus() (bool, string, int) {
 		clipState = nil
 		return false, "", 0
 	}
-	var left = int(time.Until(clipState.until).Seconds())
+	var left = int(math.Ceil(time.Until(clipState.until).Seconds()))
 	if left < 0 {
 		left = 0
 	}
