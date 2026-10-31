@@ -296,6 +296,11 @@ type execActionResponse struct {
 	Error string `json:"error,omitempty"`
 }
 
+type shutdownResponse struct {
+	Type string `json:"type"`
+	OK   bool   `json:"ok"`
+}
+
 type clipboardBeginResponse struct {
 	Type             string `json:"type"`
 	OK               bool   `json:"ok"`
@@ -574,6 +579,13 @@ func handleRequest(remote net.Addr, payload []byte) ([]byte, error) {
 			break
 		}
 		resp = clipboardResultResponse{Type: "clipboard_result", OK: true, Length: length}
+	case "shutdown":
+		if !isLoopbackAddr(remote) {
+			resp = errorResponse{Type: "error", Message: "shutdown is only allowed from loopback"}
+			break
+		}
+		requestShutdown()
+		resp = shutdownResponse{Type: "shutting_down", OK: true}
 	default:
 		resp = errorResponse{Type: "error", Message: "unknown type: " + req.Type}
 	}

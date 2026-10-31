@@ -20,6 +20,7 @@ Use it:
 
 ```sh
 ./bin/weftlink up                 # start the local daemon (background)
+./bin/weftlink stop               # stop the local daemon
 ./bin/weftlink status             # local node id / version / peer counts
 ./bin/weftlink ls                 # peers discovered on the LAN
 ./bin/weftlink ping               # round-trip time to the local daemon

@@ -151,6 +151,11 @@ type clipboardResult struct {
 	Error  string `json:"error"`
 }
 
+type shutdownResult struct {
+	Type string `json:"type"`
+	OK   bool   `json:"ok"`
+}
+
 type daemonClient struct {
 	client *proto.Client
 }

@@ -21,6 +21,7 @@ Usage:
 
 Commands:
   up                 Start weftlinkd if it is not already running
+  stop               Stop the local weftlinkd daemon
   status [peer]      Local status, or a paired peer's status
   ls                 List peers discovered on the LAN
   ping               Measure round-trip time to the local daemon
@@ -150,6 +151,8 @@ func main() {
 		err = cmdVersion(args)
 	case "up":
 		err = cmdUp(args)
+	case "stop":
+		err = cmdStop(args)
 	case "status":
 		err = cmdStatus(args)
 	case "ls":

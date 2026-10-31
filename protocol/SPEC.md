@@ -55,9 +55,13 @@ from the node-to-node message types above.
 | `{"type":"clipboard_begin","from":"...","timeout_seconds":600}` | `clipboard_begin`: `ok`, `from`, `expires_in_seconds` |
 | `{"type":"clipboard_end"}` / `clipboard_state` | off / current policy                   |
 | `{"type":"clipboard_push","peer":"..."}` / `clipboard_pull` | `clipboard_result`: `ok`, `length`, `error` |
+| `{"type":"shutdown"}`      | `shutting_down`: `ok` (loopback clients only)               |
 
 A `Peer` has: `peer_id`, `display_name`, `role`, `version`, `address`,
 `fingerprint`, `last_seen` (unix ms), `paired`.
+
+`shutdown` is accepted only from loopback connections; `weftlink stop` uses it
+to terminate the local daemon after the reply is written.
 
 ## Pairing (Knot)
 

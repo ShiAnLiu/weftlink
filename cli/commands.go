@@ -35,6 +35,38 @@ func cmdVersion(args []string) error {
 	return nil
 }
 
+func cmdStop(args []string) error {
+	var fs, g = newFlagSet("stop")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if err := noArgs(fs); err != nil {
+		return err
+	}
+	if !isLocalHost(g.host) {
+		return fmt.Errorf("stop only works on the local daemon; use --host 127.0.0.1")
+	}
+
+	var d, err = dialDaemon(g, 3*time.Second)
+	if err != nil {
+		return fmt.Errorf("weftlinkd is not running at %s", g.addr())
+	}
+	defer d.close()
+
+	var result shutdownResult
+	if err = d.call(map[string]string{"type": "shutdown"}, &result, 5*time.Second); err != nil {
+		return err
+	}
+	if !result.OK {
+		return fmt.Errorf("daemon refused shutdown")
+	}
+	if g.json {
+		return printJSON(result)
+	}
+	fmt.Println("weftlinkd stopped")
+	return nil
+}
+
 func cmdStatus(args []string) error {
 	var fs, g = newFlagSet("status")
 	if err := parseFlags(fs, args); err != nil {

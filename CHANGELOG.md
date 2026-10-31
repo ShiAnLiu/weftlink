@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- **`weftlink stop`**: stops the local daemon through a loopback-only
+  `shutdown` control verb (remote clients cannot stop a daemon).
 - **File transfer (M2)**: `weftlink send <peer> <file>` and
   `weftlink recv --from <peer> --dir <dir>` with explicit receiver consent.
   Paired-only TLS transfer, `FileOffer` / `FileAccept` / `FileChunk` /
