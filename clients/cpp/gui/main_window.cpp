@@ -60,7 +60,7 @@ MainWindow::MainWindow(QWidget *parent)
     , m_client(new weft::Client(this))
 {
     setWindowTitle(QStringLiteral("Weftlink"));
-    resize(1180, 740);
+    resize(1220, 860);
 
     buildUi();
     applyStyle();
@@ -224,7 +224,7 @@ void MainWindow::buildUi()
     pairBox->setLayout(pairBoxLayout);
 
     auto *left = new QWidget(central);
-    left->setFixedWidth(370);
+    left->setFixedWidth(360);
     auto *leftLayout = new QVBoxLayout(left);
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(12);
@@ -417,7 +417,13 @@ void MainWindow::buildUi()
     auto *root = new QHBoxLayout(central);
     root->setContentsMargins(20, 16, 20, 16);
     root->setSpacing(20);
-    root->addWidget(left);
+    auto *leftScroll = new QScrollArea(central);
+    leftScroll->setWidgetResizable(true);
+    leftScroll->setFrameShape(QFrame::NoFrame);
+    leftScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    leftScroll->setWidget(left);
+    leftScroll->setFixedWidth(380);
+    root->addWidget(leftScroll);
     root->addWidget(right, 1);
 
     connect(m_connectButton, &QPushButton::clicked, this, &MainWindow::toggleConnection);

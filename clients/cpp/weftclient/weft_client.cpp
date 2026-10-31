@@ -79,9 +79,9 @@ Client::Client(QObject *parent)
                 emit connectionStateChanged(false);
             });
     connect(m_socket, &QSslSocket::sslErrors, this,
-            [this](const QList<QSslError> &errors) {
-                for (const auto &error : errors)
-                    emit logMessage(QStringLiteral("TLS: %1").arg(error.errorString()));
+            [this](const QList<QSslError> &) {
+                // Self-signed daemon certs are expected at this stage; identity
+                // is pinned by the knot store at the application layer.
                 m_socket->ignoreSslErrors();
             });
 }
