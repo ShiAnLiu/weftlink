@@ -7,6 +7,7 @@
 #include <QCloseEvent>
 #include <QColor>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFileDialog>
@@ -23,6 +24,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QProcess>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -85,6 +87,12 @@ MainWindow::MainWindow(QWidget *parent)
                               .arg(peer, status.displayName, status.version)
                               .arg(status.peerCount)
                               .arg(status.pairedCount));
+            });
+    connect(m_client, &weft::Client::untieFinished, this,
+            [this](bool ok, const QString &error) {
+                if (!ok)
+                    QMessageBox::warning(this, QStringLiteral("Unpair failed"), error);
+                refresh();
             });
     connect(m_client, &weft::Client::fileReceiveStarted,
             this, &MainWindow::onFileReceiveStarted);
@@ -277,9 +285,11 @@ void MainWindow::buildUi()
     m_peerCombo->setMinimumContentsLength(26);
     m_peerCombo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     auto *remoteStatusButton = new QPushButton(QStringLiteral("Remote status"), peerBox);
+    m_unpairButton = new QPushButton(QStringLiteral("Unpair"), peerBox);
     peerLayout->addWidget(new QLabel(QStringLiteral("Target"), peerBox));
     peerLayout->addWidget(m_peerCombo, 1);
     peerLayout->addWidget(remoteStatusButton);
+    peerLayout->addWidget(m_unpairButton);
     m2Layout->addWidget(peerBox);
 
     auto *filesBox = new QGroupBox(QStringLiteral("Files"), m2Page);
@@ -433,6 +443,7 @@ void MainWindow::buildUi()
     connect(m_copyCodeButton, &QPushButton::clicked, this, &MainWindow::copyPairCode);
     connect(m_peerCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { setM2Enabled(m_client->isConnected()); });
     connect(remoteStatusButton, &QPushButton::clicked, this, &MainWindow::remoteStatus);
+    connect(m_unpairButton, &QPushButton::clicked, this, &MainWindow::unpairSelectedPeer);
     connect(browseSendButton, &QPushButton::clicked, this, &MainWindow::browseSendFile);
     connect(browseRecvButton, &QPushButton::clicked, this, &MainWindow::browseReceiveDir);
     connect(m_sendFileButton, &QPushButton::clicked, this, &MainWindow::sendFile);
@@ -494,6 +505,7 @@ void MainWindow::toggleConnection()
         m_client->disconnectFromDaemon();
         return;
     }
+    m_autoStartTried = false;
     m_connectButton->setEnabled(false);
     m_stateValue->setText(QStringLiteral("Connecting..."));
     statusBar()->showMessage(QStringLiteral("Connecting to %1:%2 ...")
@@ -507,6 +519,7 @@ void MainWindow::onConnectionStateChanged(bool connected)
 {
     setConnectedUi(connected);
     if (connected) {
+        m_autoStartTried = false;
         m_refreshTimer->start();
         m_execPollTimer->start();
         refresh();
@@ -632,8 +645,19 @@ void MainWindow::onPairResult(const weft::PairResult &result)
 void MainWindow::onError(const QString &message)
 {
     statusBar()->showMessage(message, 8000);
-    if (!m_client->isConnected())
+    if (!m_client->isConnected()) {
         setConnectedUi(false);
+        if (!m_autoStartTried) {
+            m_autoStartTried = true;
+            if (startDaemon()) {
+                QTimer::singleShot(1500, this, [this] {
+                    if (!m_client->isConnected())
+                        m_client->connectToDaemon(m_hostEdit->text().trimmed(),
+                                                  quint16(m_portSpin->value()));
+                });
+            }
+        }
+    }
 }
 
 void MainWindow::onLog(const QString &message)
@@ -687,6 +711,30 @@ void MainWindow::copyPairCode()
 }
 
 
+QString MainWindow::findWeftlinkCli() const
+{
+    const auto appDir = QCoreApplication::applicationDirPath();
+    const QStringList candidates = {
+        appDir + QStringLiteral("/weftlink.exe"),
+        appDir + QStringLiteral("/../../bin/weftlink.exe"),
+        appDir + QStringLiteral("/../../../bin/weftlink.exe"),
+    };
+    for (const auto &candidate : candidates) {
+        if (QFileInfo::exists(candidate))
+            return candidate;
+    }
+    return QStringLiteral("weftlink.exe");
+}
+
+bool MainWindow::startDaemon()
+{
+    const auto cli = findWeftlinkCli();
+    const auto started = QProcess::startDetached(cli, {QStringLiteral("up")});
+    appendLog(started ? QStringLiteral("Starting weftlinkd via %1 up").arg(cli)
+                      : QStringLiteral("Could not start weftlinkd; run 'weftlink up'"));
+    return started;
+}
+
 QString MainWindow::selectedPeerId() const
 {
     if (!m_peerCombo)
@@ -731,6 +779,7 @@ void MainWindow::setM2Enabled(bool enabled)
     m_clipboardOffButton->setEnabled(enabled);
     m_clipboardPushButton->setEnabled(enabled && hasPeer);
     m_clipboardPullButton->setEnabled(enabled && hasPeer);
+    m_unpairButton->setEnabled(enabled && hasPeer);
     m_execRefreshButton->setEnabled(enabled);
     m_approveButton->setEnabled(enabled && m_execTable->rowCount() > 0);
     m_denyButton->setEnabled(enabled && m_execTable->rowCount() > 0);
@@ -753,6 +802,20 @@ void MainWindow::remoteStatus()
     }
     m_client->requestPeerStatus(peer);
     statusBar()->showMessage(QStringLiteral("Requesting remote status..."), 3000);
+}
+
+void MainWindow::unpairSelectedPeer()
+{
+    if (!m_client->isConnected())
+        return;
+    const auto peer = selectedPeerId();
+    if (peer.isEmpty())
+        return;
+    if (QMessageBox::question(this, QStringLiteral("Unpair"),
+                              QStringLiteral("Unpair %1?").arg(selectedPeerLabel()))
+        != QMessageBox::Yes)
+        return;
+    m_client->untie(peer);
 }
 
 void MainWindow::browseSendFile()
@@ -905,8 +968,14 @@ void MainWindow::onRunResult(const QString &peer, const weft::RunResult &result)
         appendRunOutput(QStringLiteral("--- stderr ---"));
         appendRunOutput(result.stderrText);
     }
-    if (!result.ok)
+    if (!result.ok) {
         appendRunOutput(QStringLiteral("[error] %1").arg(result.error));
+        const auto message = result.error.isEmpty()
+            ? QStringLiteral("The remote command did not run.")
+            : result.error;
+        statusBar()->showMessage(message, 10000);
+        QMessageBox::warning(this, QStringLiteral("Remote command"), message);
+    }
 }
 
 void MainWindow::appendRunOutput(const QString &text)

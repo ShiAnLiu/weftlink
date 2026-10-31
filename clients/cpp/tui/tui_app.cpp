@@ -1,6 +1,8 @@
 #include "tui/tui_app.h"
 
 #include <QCoreApplication>
+#include <QFileInfo>
+#include <QProcess>
 #include <QDateTime>
 #include <QEventLoop>
 #include <QThread>
@@ -100,6 +102,25 @@ QString shortFingerprint(const QString &fingerprint)
 
 } // namespace
 
+namespace {
+
+bool startWeftlinkCli()
+{
+    const auto appDir = QCoreApplication::applicationDirPath();
+    const QStringList candidates = {
+        appDir + QStringLiteral("/weftlink.exe"),
+        appDir + QStringLiteral("/../../bin/weftlink.exe"),
+        appDir + QStringLiteral("/../../../bin/weftlink.exe"),
+    };
+    for (const auto &cli : candidates) {
+        if (QFileInfo::exists(cli))
+            return QProcess::startDetached(cli, {QStringLiteral("up")});
+    }
+    return QProcess::startDetached(QStringLiteral("weftlink.exe"), {QStringLiteral("up")});
+}
+
+} // namespace
+
 TuiApp::TuiApp(QString host, quint16 port)
     : m_host(std::move(host))
     , m_port(port)
@@ -117,8 +138,11 @@ int TuiApp::run()
     QObject::connect(&m_client, &weft::Client::connectionStateChanged, &m_client,
                      [this](bool connected) {
                          m_connected = connected;
-                         if (connected)
+                         if (connected) {
+                             m_autoStartTried = false;
+                             m_retryAt = 0;
                              m_lastRefresh.restart();
+                         }
                          m_dirty = true;
                      });
     QObject::connect(&m_client, &weft::Client::statusReceived, &m_client,
@@ -147,7 +171,16 @@ int TuiApp::run()
     QObject::connect(&m_client, &weft::Client::pairResultReceived, &m_client,
                      [this](const weft::PairResult &) { m_dirty = true; });
     QObject::connect(&m_client, &weft::Client::errorOccurred, &m_client,
-                     [this](const QString &) { m_dirty = true; });
+                     [this](const QString &) {
+                         if (!m_connected && !m_autoStartTried) {
+                             m_autoStartTried = true;
+                             if (startWeftlinkCli()) {
+                                 log(QStringLiteral("weftlinkd not running; starting it..."));
+                                 m_retryAt = QDateTime::currentMSecsSinceEpoch() + 1500;
+                             }
+                         }
+                         m_dirty = true;
+                     });
     QObject::connect(&m_client, &weft::Client::logMessage, &m_client,
                      [this](const QString &message) { log(message); });
 
@@ -168,6 +201,11 @@ int TuiApp::run()
         if (!m_running)
             break;
 
+        if (!m_connected && m_retryAt > 0
+            && QDateTime::currentMSecsSinceEpoch() >= m_retryAt) {
+            m_retryAt = 0;
+            m_client.connectToDaemon(m_host, m_port);
+        }
         if (m_connected && m_lastRefresh.elapsed() >= 2000) {
             m_client.requestStatus();
             m_lastRefresh.restart();
@@ -238,6 +276,7 @@ void TuiApp::handleKey(const QString &key)
         if (m_connected) {
             log(QStringLiteral("Already connected"));
         } else {
+            m_autoStartTried = false;
             log(QStringLiteral("Connecting to %1:%2 ...").arg(m_host).arg(m_port));
             m_client.connectToDaemon(m_host, m_port);
         }

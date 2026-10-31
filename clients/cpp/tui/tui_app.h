@@ -45,4 +45,6 @@ private:
     QString m_joinCode;
 
     QElapsedTimer m_lastRefresh;
+    bool m_autoStartTried = false;
+    qint64 m_retryAt = 0;
 };

@@ -160,6 +160,48 @@ class PairConfirm {
   };
 }
 
+/// Ask a paired peer to remove the knot
+class UnpairRequest {
+  final String from_node_id;
+  final String from_fingerprint;
+
+  UnpairRequest({
+    required this.from_node_id,
+    required this.from_fingerprint,
+  });
+
+  factory UnpairRequest.fromJson(Map<String, dynamic> j) => UnpairRequest(
+    from_node_id: j['from_node_id'],
+    from_fingerprint: j['from_fingerprint'],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'from_node_id': from_node_id,
+    'from_fingerprint': from_fingerprint,
+  };
+}
+
+/// Answer to an unpair request
+class UnpairAck {
+  final bool ok;
+  final String error;
+
+  UnpairAck({
+    required this.ok,
+    required this.error,
+  });
+
+  factory UnpairAck.fromJson(Map<String, dynamic> j) => UnpairAck(
+    ok: j['ok'],
+    error: j['error'],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'ok': ok,
+    'error': error,
+  };
+}
+
 /// Liveness check
 class Ping {
   final String nonce;

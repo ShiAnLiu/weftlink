@@ -26,6 +26,8 @@ Commands:
   ls                 List peers discovered on the LAN
   ping               Measure round-trip time to the local daemon
   knot [code]        Pair with a peer; without a code, print a new pair code
+  untie <peer>       Unpair a device (alias: unpair)
+  firewall allow     Add Windows Firewall rules (run as Administrator)
   send <peer> <file> Send a file to a paired peer
   recv [flags]       Wait for one incoming file (receiver must opt in first)
   run <peer> <cmd>   Request a remote command (peer must approve)
@@ -161,6 +163,8 @@ func main() {
 		err = cmdPing(args)
 	case "knot":
 		err = cmdKnot(args)
+	case "untie", "unpair":
+		err = cmdUntie(args)
 	case "send":
 		err = cmdSend(args)
 	case "recv":
@@ -175,6 +179,8 @@ func main() {
 		err = cmdDeny(args)
 	case "clipboard":
 		err = cmdClipboard(args)
+	case "firewall":
+		err = cmdFirewall(args)
 	default:
 		fmt.Fprintf(os.Stderr, "weftlink: unknown command %q\n\n", cmd)
 		printUsage(os.Stderr)

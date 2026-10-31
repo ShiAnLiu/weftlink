@@ -33,6 +33,7 @@ public:
     void ping();
     void requestPairCode();
     void joinPair(const QString &code, const QString &peerHost = {});
+    void untie(const QString &peer);
 
     // M2 data plane (through the local daemon).
     void requestPeerStatus(const QString &peer);
@@ -61,6 +62,7 @@ signals:
     void pongReceived(qint64 rttMs);
     void pairCodeReceived(const QString &code, int expiresInSeconds);
     void pairResultReceived(const weft::PairResult &result);
+    void untieFinished(bool ok, const QString &error);
     void errorOccurred(const QString &message);
     void logMessage(const QString &message);
 

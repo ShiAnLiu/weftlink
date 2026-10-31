@@ -262,6 +262,7 @@ func executeCommand(execID string, command string, cwd string, timeout time.Dura
 	defer cancel()
 
 	var cmd = exec.CommandContext(ctx, name, args...)
+	configureExecProcess(cmd)
 	if cwd != "" {
 		var info, err = os.Stat(cwd)
 		if err != nil || !info.IsDir() {

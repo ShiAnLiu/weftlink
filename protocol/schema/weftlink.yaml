@@ -49,6 +49,18 @@ messages:
       node:         { type: NodeInfo, required: true }
       fingerprint:  { type: string, required: true, description: "Ed25519 public key fingerprint (hex)" }
 
+  UnpairRequest:
+    description: "Ask a paired peer to remove the knot"
+    fields:
+      from_node_id:     { type: string, required: true }
+      from_fingerprint: { type: string, required: true }
+
+  UnpairAck:
+    description: "Answer to an unpair request"
+    fields:
+      ok:    { type: bool, required: true }
+      error: { type: string, required: false }
+
   Ping:
     description: "Liveness check"
     fields:

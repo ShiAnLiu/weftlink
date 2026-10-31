@@ -44,6 +44,8 @@ from the node-to-node message types above.
 | `{"type":"ping"}`          | `pong`: echoes `nonce`, `ts`                               |
 | `{"type":"knot_init"}`     | `knot_code`: `code`, `expires_in_seconds`                  |
 | `{"type":"knot_join","code":"...","host":"..."}` | `knot_result`: `ok`, `peer`, `error` |
+| `{"type":"untie","peer":"..."}` | `untie_result`: `ok`, `error` |
+| `{"type":"unpair_request"}` | `unpair_ack`: `ok`, `error` |
 | `{"type":"peer_status","peer":"..."}` | `peer_status`: `ok`, remote `status`, `error` |
 | `{"type":"send_file","peer":"...","path":"..."}` | `send_result`: `ok`, `checksum`, `size`, `error` |
 | `{"type":"recv_begin","dir":"...","from":"...","timeout_seconds":300}` | `recv_begin`: `ok`, `dir`, `timeout_seconds`, `error` |
@@ -83,6 +85,9 @@ to terminate the local daemon after the reply is written.
 4. Both sides persist the peer fingerprint and address under
    `~/.weftlink/knots/<peer_id>.json`. Pairing is mutual: generating the code
    confirms the waiting node, entering it confirms the joining node.
+5. `weftlink untie <peer>` removes the local knot and best-effort sends an
+   `unpair_request` so the peer also drops it. If the peer is offline, the
+   local removal still succeeds.
 
 ## File Transfer (M2)
 

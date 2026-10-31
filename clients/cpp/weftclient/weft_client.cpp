@@ -175,6 +175,12 @@ void Client::joinPair(const QString &code, const QString &peerHost)
                  {QStringLiteral("host"), peerHost.trimmed()}});
 }
 
+void Client::untie(const QString &peer)
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("untie")},
+                 {QStringLiteral("peer"), peer}});
+}
+
 void Client::requestPeerStatus(const QString &peer)
 {
     m_pendingStatusPeer = peer;
@@ -334,6 +340,12 @@ void Client::handleMessage(const QJsonObject &message)
                                     parseStatus(message.value(QStringLiteral("status")).toObject()));
         }
         m_pendingStatusPeer.clear();
+    } else if (type == QLatin1String("untie_result")) {
+        const auto ok = message.value(QStringLiteral("ok")).toBool();
+        const auto error = jsonString(message, "error");
+        emit untieFinished(ok, error);
+        emit logMessage(ok ? QStringLiteral("Unpaired peer")
+                           : QStringLiteral("Unpair failed: %1").arg(error));
     } else if (type == QLatin1String("send_result")) {
         SendFileResult result;
         result.ok = message.value(QStringLiteral("ok")).toBool();

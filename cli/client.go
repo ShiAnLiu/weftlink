@@ -157,6 +157,12 @@ type shutdownResult struct {
 	OK   bool   `json:"ok"`
 }
 
+type untieResult struct {
+	Type  string `json:"type"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error"`
+}
+
 type daemonClient struct {
 	client *proto.Client
 }

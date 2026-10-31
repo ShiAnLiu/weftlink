@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Added
+- **Unpair** (`weftlink untie` / GUI Unpair): removes the local knot and
+  best-effort notifies the peer (`unpair_request` / `unpair_ack`).
+- **Firewall helper**: `weftlink firewall allow` (Windows, administrator)
+  adds inbound TCP 7801 / UDP 7802 rules for `profile=any`.
+- **Daemon auto-start**: GUI Connect and TUI `c` try `weftlink up` when the
+  daemon is not running, then retry the connection.
+- **Quiet remote execution**: approved commands run with a hidden console on
+  Windows; denials/timeouts show a warning on the caller.
 - **GUI M2 panel** (`weftlink-gui`): file send/receive, remote status,
   run-request approval (requests table + approve/deny), and clipboard
   enable/push/pull, sharing the same Qt client as the CLI.

@@ -50,6 +50,18 @@ type PairConfirm struct {
 	Fingerprint string   `json:"fingerprint"` // Ed25519 public key fingerprint (hex)
 }
 
+// UnpairRequest — Ask a paired peer to remove the knot
+type UnpairRequest struct {
+	FromNodeId      string `json:"from_node_id"`
+	FromFingerprint string `json:"from_fingerprint"`
+}
+
+// UnpairAck — Answer to an unpair request
+type UnpairAck struct {
+	Ok    bool   `json:"ok"`
+	Error string `json:"error"`
+}
+
 // Ping — Liveness check
 type Ping struct {
 	Nonce string `json:"nonce"`

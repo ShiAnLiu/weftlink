@@ -57,6 +57,7 @@ private slots:
     void refreshExecRequests();
     void onExecRequests(const QList<weft::ExecRequest> &requests);
     void approveSelectedExec();
+    void unpairSelectedPeer();
     void denySelectedExec();
     void onExecAction(bool ok, const QString &error);
     void enableClipboard();
@@ -77,6 +78,8 @@ private:
     void appendRunOutput(const QString &text);
     QString formatAge(qint64 millisecondsSinceEpoch) const;
     QString selectedPeerId() const;
+    QString findWeftlinkCli() const;
+    bool startDaemon();
     QString selectedPeerLabel() const;
     void setM2Enabled(bool enabled);
     void setFileStatus(const QString &text);
@@ -115,6 +118,7 @@ private:
     QPushButton *m_sendFileButton = nullptr;
     QPushButton *m_recvButton = nullptr;
     QPushButton *m_recvCancelButton = nullptr;
+    QPushButton *m_unpairButton = nullptr;
     QTimer *m_recvPollTimer = nullptr;
     QTimer *m_execPollTimer = nullptr;
 
@@ -136,5 +140,6 @@ private:
     QLabel *m_clipboardStatus = nullptr;
 
     QString m_lastPeerState;
+    bool m_autoStartTried = false;
     QString m_pairCode;
 };

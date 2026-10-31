@@ -18,7 +18,12 @@ an **M2** tab:
 - open a one-file receive window (or accept from any paired peer);
 - request a remote command and approve/deny pending requests on this machine;
 - enable clipboard receive and push/pull clipboard text;
-- query the selected peer's remote status.
+- query the selected peer's remote status;
+- unpair the selected peer.
+
+If the daemon is not running, Connect (GUI) or `c` (TUI) tries `weftlink up`
+and retries. On Windows `weftlink firewall allow` (administrator) adds the
+inbound rules.
 
 The daemon still enforces explicit consent: receive windows, run approval and
 clipboard opt-in are all required. The TUI currently covers the M1 operations

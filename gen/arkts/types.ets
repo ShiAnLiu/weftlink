@@ -45,6 +45,18 @@ export interface PairConfirm {
   fingerprint: string;
 }
 
+/** Ask a paired peer to remove the knot */
+export interface UnpairRequest {
+  from_node_id: string;
+  from_fingerprint: string;
+}
+
+/** Answer to an unpair request */
+export interface UnpairAck {
+  ok: boolean;
+  error: string;
+}
+
 /** Liveness check */
 export interface Ping {
   nonce: string;

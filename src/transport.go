@@ -303,6 +303,12 @@ type shutdownResponse struct {
 	OK   bool   `json:"ok"`
 }
 
+type untieResultResponse struct {
+	Type  string `json:"type"`
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
+}
+
 type clipboardBeginResponse struct {
 	Type             string `json:"type"`
 	OK               bool   `json:"ok"`
@@ -599,6 +605,18 @@ func handleRequest(remote net.Addr, payload []byte) ([]byte, error) {
 			break
 		}
 		resp = clipboardResultResponse{Type: "clipboard_result", OK: true, Length: length}
+	case "unpair_request":
+		if err = handleUnpairRequest(req.FromNodeID, req.FromFingerprint); err != nil {
+			resp = unpairAck{Type: "unpair_ack", OK: false, Error: err.Error()}
+			break
+		}
+		resp = unpairAck{Type: "unpair_ack", OK: true}
+	case "untie":
+		if err = untiePeer(req.Peer); err != nil {
+			resp = untieResultResponse{Type: "untie_result", OK: false, Error: err.Error()}
+			break
+		}
+		resp = untieResultResponse{Type: "untie_result", OK: true}
 	case "shutdown":
 		if !isLoopbackAddr(remote) {
 			resp = errorResponse{Type: "error", Message: "shutdown is only allowed from loopback"}

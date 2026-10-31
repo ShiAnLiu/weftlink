@@ -47,6 +47,17 @@ Last updated: 2026-10-31
 - ⚠️ 防火墙坑：Windows Wi-Fi 常被标为 **公用网络**，规则必须 `-Profile Any`
   （或把网络改成专用）；否则 UDP 发现被拦，`ls` 为空，可用 `--peer` 兜底。
 
+## 其他 CLI/桌面能力
+
+- ✅ **取消配对**：`weftlink untie <peer>`（别名 `unpair`）/ GUI Unpair；删除本地
+  knot，并 best-effort 通知对方 `unpair_request`（对方离线时本地仍成功）。
+- ✅ **自动防火墙**：`weftlink firewall allow`（Windows 管理员）写入 TCP 7801 /
+  UDP 7802、`profile=any` 入站规则。
+- ✅ **GUI/TUI 自动拉起 daemon**：连接失败时尝试 `weftlink up` 后重试。
+- ✅ **远程命令无控制台弹窗**：批准后子进程使用 `CREATE_NO_WINDOW`；deny/timeout
+  会在调用方 GUI 弹出提示。
+- ⏳ 待办：交互式命令（ssh 等）需要 PTY + 流式 stdin/stdout，单独设计。
+
 ## 本轮实现要点
 
 - **TLS 加密**：daemon 首次启动自动生成自签名证书（ECDSA P-256），`*.pem` 永不入库；
@@ -74,13 +85,15 @@ Last updated: 2026-10-31
   `golang.design/x/clipboard`，其他平台暂为 stub（返回 not implemented）。
 - ✅ 本地双 daemon 端到端已验证：文件 send/recv + SHA-256、远程 status、run 批准执行、
   clipboard push/pull（Windows）。
-- ⏳ 待办：两台真机 Windows 复测 M2；C++/Qt 客户端接入 send/recv/run/clipboard。
+- ⏳ 待办：两台真机 Windows 复测 M2；TUI 的 M2 操作面板（GUI 已接入）。
 
 ## 桌面客户端（C++/Qt，新增）
 
 - `clients/cpp`：共享 `weftclient`（Qt Network/`QSslSocket` + Weft 帧），
   `weftlink-gui`（Qt Widgets 双栏控制台）与 `weftlink-tui`（全屏 ANSI）。
-  展示节点/发现计数/peers/配对/Ping/日志，支持生成与输入 6 位配对码。
+  基础功能：节点/发现计数/peers/配对/Ping/日志；GUI 的 M2 页签已接入
+  文件 send/recv、远程 status、run 审批、clipboard push/pull、Unpair；
+  daemon 未运行时 GUI/TUI 会尝试自动 `weftlink up`。
 - 本地验证（2026-10-31）：MinGW 13.1 + Qt 6.7.2 构建通过；CTest 6 项全绿；
   `weftlink-tui --check` 对运行中的 daemon 成功读取状态/peers；
   `windeployqt` 打包后的 GUI/TUI 在最小 PATH 下可独立运行。
@@ -90,7 +103,7 @@ Last updated: 2026-10-31
 
 | 套件 | 数量 | 命令 |
 |------|------|------|
-| Go 单元/集成 | 47 | `go test ./...` |
+| Go 单元/集成 | 54 | `go test ./...` |
 | Dart core_client | 2 | `dart test` |
 | Flutter app | 3 | `flutter test` |
 | C++/Qt | 6 | `ctest --test-dir build/qt` |

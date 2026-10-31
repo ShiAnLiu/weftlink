@@ -35,6 +35,47 @@ func cmdVersion(args []string) error {
 	return nil
 }
 
+func cmdUntie(args []string) error {
+	var fs, g = newFlagSet("untie")
+	if err := parseFlags(fs, args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("usage: weftlink untie <peer>")
+	}
+	var d, err = dialDaemon(g, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	defer d.close()
+	var result untieResult
+	if err = d.call(map[string]string{
+		"type": "untie",
+		"peer": fs.Arg(0),
+	}, &result, 15*time.Second); err != nil {
+		return err
+	}
+	if !result.OK {
+		return fmt.Errorf("%s", result.Error)
+	}
+	if g.json {
+		return printJSON(result)
+	}
+	fmt.Printf("unpaired: %s\n", fs.Arg(0))
+	return nil
+}
+
+func cmdFirewall(args []string) error {
+	if len(args) == 0 || (args[0] != "allow" && args[0] != "on") {
+		return fmt.Errorf("usage: weftlink firewall allow (run as Administrator)")
+	}
+	if err := configureFirewall(); err != nil {
+		return err
+	}
+	fmt.Println("firewall rules added for TCP 7801 and UDP 7802 (profile any)")
+	return nil
+}
+
 func cmdStop(args []string) error {
 	var fs, g = newFlagSet("stop")
 	if err := parseFlags(fs, args); err != nil {
