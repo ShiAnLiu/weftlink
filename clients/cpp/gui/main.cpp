@@ -86,6 +86,8 @@ int main(int argc, char *argv[])
 
 #ifdef Q_OS_WIN
     SetUnhandledExceptionFilter(guiCrashFilter);
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
+        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 #endif
 
     QApplication app(argc, argv);
