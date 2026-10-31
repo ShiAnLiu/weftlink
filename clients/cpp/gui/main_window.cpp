@@ -323,7 +323,10 @@ void MainWindow::onStatus(const weft::Status &status)
                                     : status.fingerprint);
     m_fingerprintValue->setToolTip(status.fingerprint);
 
-    if (status.discoveryActive) {
+    if (status.discoveryPort <= 0) {
+        m_discoveryValue->setText(
+            QStringLiteral("Discovery telemetry not reported by this daemon"));
+    } else if (status.discoveryActive) {
         const auto last = status.lastBeaconMs > 0 ? formatAge(status.lastBeaconMs)
                                                   : QStringLiteral("-");
         m_discoveryValue->setText(QStringLiteral("UDP/%1 active · sent %2 · received %3 · last %4")

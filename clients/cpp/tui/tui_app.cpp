@@ -355,7 +355,10 @@ void TuiApp::render()
                      + paint("90", shortFingerprint(m_status.fingerprint)));
     }
     if (m_connected) {
-        if (m_status.discoveryActive) {
+        if (m_status.discoveryPort <= 0) {
+            lines << box(paint("90", QStringLiteral("Discovery  "))
+                         + paint("90", QStringLiteral("not reported by daemon")));
+        } else if (m_status.discoveryActive) {
             const auto last = m_status.lastBeaconMs > 0 ? formatAge(m_status.lastBeaconMs)
                                                         : QStringLiteral("-");
             lines << box(paint("90", QStringLiteral("Discovery  "))
