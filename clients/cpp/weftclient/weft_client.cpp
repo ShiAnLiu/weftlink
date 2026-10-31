@@ -43,6 +43,12 @@ Client::Client(QObject *parent)
     qRegisterMetaType<weft::Peer>();
     qRegisterMetaType<weft::Status>();
     qRegisterMetaType<weft::PairResult>();
+    qRegisterMetaType<weft::SendFileResult>();
+    qRegisterMetaType<weft::ReceiveResult>();
+    qRegisterMetaType<weft::RunResult>();
+    qRegisterMetaType<weft::ExecRequest>();
+    qRegisterMetaType<weft::ClipboardState>();
+    qRegisterMetaType<weft::ClipboardResult>();
 
     // The daemon uses a self-signed certificate; identity is established by the
     // knot fingerprint at the application layer (same policy as `weftlink` CLI).
@@ -169,6 +175,95 @@ void Client::joinPair(const QString &code, const QString &peerHost)
                  {QStringLiteral("host"), peerHost.trimmed()}});
 }
 
+void Client::requestPeerStatus(const QString &peer)
+{
+    m_pendingStatusPeer = peer;
+    sendRequest({{QStringLiteral("type"), QStringLiteral("peer_status")},
+                 {QStringLiteral("peer"), peer}});
+}
+
+void Client::sendFile(const QString &peer, const QString &path)
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("send_file")},
+                 {QStringLiteral("peer"), peer},
+                 {QStringLiteral("path"), path}});
+}
+
+void Client::beginReceive(const QString &dir, const QString &from, int timeoutSeconds)
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("recv_begin")},
+                 {QStringLiteral("dir"), dir},
+                 {QStringLiteral("from"), from},
+                 {QStringLiteral("timeout_seconds"), timeoutSeconds}});
+}
+
+void Client::pollReceive()
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("recv_poll")}});
+}
+
+void Client::cancelReceive()
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("recv_cancel")}});
+}
+
+void Client::runCommand(const QString &peer, const QString &command, int timeoutSeconds,
+                        const QString &shell)
+{
+    m_pendingRunPeer = peer;
+    sendRequest({{QStringLiteral("type"), QStringLiteral("run_command")},
+                 {QStringLiteral("peer"), peer},
+                 {QStringLiteral("command"), command},
+                 {QStringLiteral("timeout_seconds"), timeoutSeconds},
+                 {QStringLiteral("shell"), shell}});
+}
+
+void Client::requestExecRequests()
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("exec_requests")}});
+}
+
+void Client::approveExec(const QString &execId)
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("exec_approve")},
+                 {QStringLiteral("exec_id"), execId}});
+}
+
+void Client::denyExec(const QString &execId)
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("exec_deny")},
+                 {QStringLiteral("exec_id"), execId}});
+}
+
+void Client::clipboardOn(const QString &from, int timeoutSeconds)
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("clipboard_begin")},
+                 {QStringLiteral("from"), from},
+                 {QStringLiteral("timeout_seconds"), timeoutSeconds}});
+}
+
+void Client::clipboardOff()
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("clipboard_end")}});
+}
+
+void Client::requestClipboardState()
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("clipboard_state")}});
+}
+
+void Client::clipboardPush(const QString &peer)
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("clipboard_push")},
+                 {QStringLiteral("peer"), peer}});
+}
+
+void Client::clipboardPull(const QString &peer)
+{
+    sendRequest({{QStringLiteral("type"), QStringLiteral("clipboard_pull")},
+                 {QStringLiteral("peer"), peer}});
+}
+
 void Client::sendRequest(const QJsonObject &request)
 {
     if (!isConnected()) {
@@ -231,6 +326,81 @@ void Client::handleMessage(const QJsonObject &message)
                                  jsonString(message, "version")));
     } else if (type == QLatin1String("pair_confirm")) {
         emit logMessage(QStringLiteral("Pairing confirmed by peer"));
+    } else if (type == QLatin1String("peer_status")) {
+        if (!message.value(QStringLiteral("ok")).toBool()) {
+            setError(jsonString(message, "error"));
+        } else if (message.value(QStringLiteral("status")).isObject()) {
+            emit peerStatusReceived(m_pendingStatusPeer,
+                                    parseStatus(message.value(QStringLiteral("status")).toObject()));
+        }
+        m_pendingStatusPeer.clear();
+    } else if (type == QLatin1String("send_result")) {
+        SendFileResult result;
+        result.ok = message.value(QStringLiteral("ok")).toBool();
+        result.checksum = jsonString(message, "checksum");
+        result.size = jsonInt64(message, "size");
+        result.error = jsonString(message, "error");
+        emit fileSent(result);
+        emit logMessage(result.ok
+                            ? QStringLiteral("File sent (%1 bytes)").arg(result.size)
+                            : QStringLiteral("Send failed: %1").arg(result.error));
+    } else if (type == QLatin1String("recv_begin")) {
+        if (!message.value(QStringLiteral("ok")).toBool()) {
+            setError(jsonString(message, "error"));
+        } else {
+            emit fileReceiveStarted(jsonString(message, "dir"),
+                                    jsonInt(message, "timeout_seconds", 300));
+            emit logMessage(QStringLiteral("Receiving into %1").arg(jsonString(message, "dir")));
+        }
+    } else if (type == QLatin1String("recv_result")) {
+        ReceiveResult result;
+        result.pending = message.value(QStringLiteral("pending")).toBool();
+        result.ok = message.value(QStringLiteral("ok")).toBool();
+        result.path = jsonString(message, "path");
+        result.name = jsonString(message, "name");
+        result.checksum = jsonString(message, "checksum");
+        result.fromNodeId = jsonString(message, "from_node_id");
+        result.size = jsonInt64(message, "size");
+        result.error = jsonString(message, "error");
+        if (!result.pending)
+            emit fileReceived(result);
+    } else if (type == QLatin1String("run_result")) {
+        RunResult result;
+        result.ok = message.value(QStringLiteral("ok")).toBool();
+        result.exitCode = jsonInt(message, "exit_code", -1);
+        result.stdoutText = jsonString(message, "stdout");
+        result.stderrText = jsonString(message, "stderr");
+        result.error = jsonString(message, "error");
+        emit runResultReceived(m_pendingRunPeer, result);
+        m_pendingRunPeer.clear();
+    } else if (type == QLatin1String("exec_requests")) {
+        QList<ExecRequest> requests;
+        const auto array = message.value(QStringLiteral("requests")).toArray();
+        for (const auto &item : array) {
+            if (item.isObject())
+                requests.append(parseExecRequest(item.toObject()));
+        }
+        emit execRequestsReceived(requests);
+    } else if (type == QLatin1String("exec_action")) {
+        emit execActionFinished(message.value(QStringLiteral("ok")).toBool(),
+                                jsonString(message, "error"));
+    } else if (type == QLatin1String("clipboard_begin")
+               || type == QLatin1String("clipboard_end")
+               || type == QLatin1String("clipboard_state")) {
+        ClipboardState state;
+        state.active = type != QLatin1String("clipboard_end")
+            && message.value(QStringLiteral("active")).toBool(true);
+        state.from = jsonString(message, "from");
+        state.expiresInSeconds = jsonInt(message, "expires_in_seconds", 0);
+        if (type == QLatin1String("clipboard_begin") && state.active)
+            state.active = true;
+        emit clipboardStateReceived(state);
+    } else if (type == QLatin1String("clipboard_result")) {
+        ClipboardResult result;
+        result.ok = message.value(QStringLiteral("ok")).toBool();
+        result.length = jsonInt(message, "length");
+        result.error = jsonString(message, "error");
+        emit clipboardResultReceived(result);
     } else if (type == QLatin1String("error")) {
         setError(jsonString(message, "message"));
     } else {
@@ -283,6 +453,19 @@ Status Client::parseStatus(const QJsonObject &object)
     status.peerCount = jsonInt(object, "peer_count", int(status.peers.size()));
     status.pairedCount = jsonInt(object, "paired_count");
     return status;
+}
+
+ExecRequest Client::parseExecRequest(const QJsonObject &object)
+{
+    ExecRequest request;
+    request.execId = jsonString(object, "exec_id");
+    request.peerId = jsonString(object, "peer_id");
+    request.command = jsonString(object, "command");
+    request.shell = jsonString(object, "shell");
+    request.cwd = jsonString(object, "cwd");
+    request.createdMs = jsonInt64(object, "created_ms");
+    request.ageSeconds = jsonInt(object, "age_seconds");
+    return request;
 }
 
 } // namespace weft

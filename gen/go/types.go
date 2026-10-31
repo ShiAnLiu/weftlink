@@ -125,6 +125,7 @@ type ExecRequest struct {
 	Command         string `json:"command"`
 	Cwd             string `json:"cwd"`
 	Timeout         uint32 `json:"timeout"` // seconds, 0 = no limit
+	Shell           string `json:"shell"`
 	FromNodeId      string `json:"from_node_id"`
 	FromFingerprint string `json:"from_fingerprint"`
 }

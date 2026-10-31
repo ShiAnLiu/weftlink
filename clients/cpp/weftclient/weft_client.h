@@ -34,6 +34,26 @@ public:
     void requestPairCode();
     void joinPair(const QString &code, const QString &peerHost = {});
 
+    // M2 data plane (through the local daemon).
+    void requestPeerStatus(const QString &peer);
+    void sendFile(const QString &peer, const QString &path);
+    void beginReceive(const QString &dir, const QString &from, int timeoutSeconds);
+    void pollReceive();
+    void cancelReceive();
+    void runCommand(const QString &peer, const QString &command, int timeoutSeconds,
+                    const QString &shell);
+    void requestExecRequests();
+    void approveExec(const QString &execId);
+    void denyExec(const QString &execId);
+    void clipboardOn(const QString &from, int timeoutSeconds);
+    void clipboardOff();
+    void requestClipboardState();
+    void clipboardPush(const QString &peer);
+    void clipboardPull(const QString &peer);
+
+    QString host() const { return m_host; }
+    quint16 port() const { return m_port; }
+
 signals:
     void connectionStateChanged(bool connected);
     void statusReceived(const weft::Status &status);
@@ -44,6 +64,16 @@ signals:
     void errorOccurred(const QString &message);
     void logMessage(const QString &message);
 
+    void peerStatusReceived(const QString &peer, const weft::Status &status);
+    void fileSent(const weft::SendFileResult &result);
+    void fileReceiveStarted(const QString &dir, int timeoutSeconds);
+    void fileReceived(const weft::ReceiveResult &result);
+    void runResultReceived(const QString &peer, const weft::RunResult &result);
+    void execRequestsReceived(const QList<weft::ExecRequest> &requests);
+    void execActionFinished(bool ok, const QString &error);
+    void clipboardStateReceived(const weft::ClipboardState &state);
+    void clipboardResultReceived(const weft::ClipboardResult &result);
+
 private:
     void sendRequest(const QJsonObject &request);
     void handleMessage(const QJsonObject &message);
@@ -51,6 +81,7 @@ private:
 
     static Peer parsePeer(const QJsonObject &object);
     static Status parseStatus(const QJsonObject &object);
+    static ExecRequest parseExecRequest(const QJsonObject &object);
 
     QSslSocket *m_socket = nullptr;
     FrameCodec m_codec;
@@ -58,6 +89,8 @@ private:
     QString m_lastError;
     QString m_host;
     quint16 m_port = 0;
+    QString m_pendingStatusPeer;
+    QString m_pendingRunPeer;
 };
 
 } // namespace weft

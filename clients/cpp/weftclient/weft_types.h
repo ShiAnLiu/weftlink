@@ -42,8 +42,68 @@ struct PairResult
     Peer peer;
 };
 
+struct SendFileResult
+{
+    bool ok = false;
+    QString checksum;
+    qint64 size = 0;
+    QString error;
+};
+
+struct ReceiveResult
+{
+    bool ok = false;
+    bool pending = false;
+    QString path;
+    QString name;
+    QString checksum;
+    QString fromNodeId;
+    qint64 size = 0;
+    QString error;
+};
+
+struct RunResult
+{
+    bool ok = false;
+    int exitCode = -1;
+    QString stdoutText;
+    QString stderrText;
+    QString error;
+};
+
+struct ExecRequest
+{
+    QString execId;
+    QString peerId;
+    QString command;
+    QString shell;
+    QString cwd;
+    qint64 createdMs = 0;
+    int ageSeconds = 0;
+};
+
+struct ClipboardState
+{
+    bool active = false;
+    QString from;
+    int expiresInSeconds = 0;
+};
+
+struct ClipboardResult
+{
+    bool ok = false;
+    int length = 0;
+    QString error;
+};
+
 } // namespace weft
 
 Q_DECLARE_METATYPE(weft::Peer)
 Q_DECLARE_METATYPE(weft::Status)
 Q_DECLARE_METATYPE(weft::PairResult)
+Q_DECLARE_METATYPE(weft::SendFileResult)
+Q_DECLARE_METATYPE(weft::ReceiveResult)
+Q_DECLARE_METATYPE(weft::RunResult)
+Q_DECLARE_METATYPE(weft::ExecRequest)
+Q_DECLARE_METATYPE(weft::ClipboardState)
+Q_DECLARE_METATYPE(weft::ClipboardResult)

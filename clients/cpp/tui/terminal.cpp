@@ -49,6 +49,8 @@ bool Terminal::init(QString *error)
 #ifdef _WIN32
     m_impl->input = GetStdHandle(STD_INPUT_HANDLE);
     m_impl->output = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
     if (m_impl->input == INVALID_HANDLE_VALUE || m_impl->output == INVALID_HANDLE_VALUE) {
         if (error)
             *error = QStringLiteral("no Windows console attached");

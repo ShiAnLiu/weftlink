@@ -465,16 +465,26 @@ func cmdRecv(args []string) error {
 func cmdRun(args []string) error {
 	var fs, g = newFlagSet("run")
 	var timeout = fs.Int("timeout", 30, "remote command timeout in seconds")
+	var shell = fs.String("shell", "auto", "auto|powershell|cmd|sh")
 	if err := parseFlags(fs, args); err != nil {
 		return err
 	}
 	if fs.NArg() < 2 {
-		return fmt.Errorf("usage: weftlink run <peer> \"<command>\" [--timeout seconds]")
+		return fmt.Errorf("usage: weftlink run <peer> \"<command>\" [--timeout seconds] [--shell auto|powershell|cmd|sh]")
 	}
 	var peerArg = fs.Arg(0)
 	var command = strings.Join(fs.Args()[1:], " ")
 	if strings.TrimSpace(command) == "" {
 		return fmt.Errorf("command is empty")
+	}
+	var normalizedShell = strings.ToLower(strings.TrimSpace(*shell))
+	switch normalizedShell {
+	case "", "auto", "powershell", "cmd", "sh":
+	default:
+		return fmt.Errorf("unsupported shell %q (use auto|powershell|cmd|sh)", *shell)
+	}
+	if normalizedShell == "" {
+		normalizedShell = "auto"
 	}
 
 	var d, err = dialDaemon(g, 5*time.Second)
@@ -484,7 +494,7 @@ func cmdRun(args []string) error {
 	defer d.close()
 
 	if !g.json {
-		fmt.Printf("Waiting for %s to approve: %s\n", peerArg, command)
+		fmt.Printf("Waiting for %s to approve (%s): %s\n", peerArg, normalizedShell, command)
 	}
 	var result runResult
 	var wait = 2*time.Minute + time.Duration(*timeout)*time.Second + 40*time.Second
@@ -493,6 +503,7 @@ func cmdRun(args []string) error {
 		"peer":            peerArg,
 		"command":         command,
 		"timeout_seconds": *timeout,
+		"shell":           normalizedShell,
 	}, &result, wait)
 	if err != nil {
 		return err
@@ -556,10 +567,10 @@ func cmdRequests(args []string) error {
 		return nil
 	}
 	var w = tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tPEER\tAGE\tCOMMAND")
+	fmt.Fprintln(w, "ID\tPEER\tSHELL\tAGE\tCOMMAND")
 	for _, request := range result.Requests {
-		fmt.Fprintf(w, "%s\t%s\t%ds\t%s\n", request.ExecID, request.PeerID,
-			request.AgeSeconds, request.Command)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%ds\t%s\n", request.ExecID, request.PeerID,
+			request.Shell, request.AgeSeconds, request.Command)
 	}
 	return w.Flush()
 }

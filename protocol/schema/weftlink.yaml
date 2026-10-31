@@ -125,6 +125,7 @@ messages:
       command: { type: string, required: true }
       cwd:     { type: string, required: false }
       timeout: { type: uint32, required: false, description: "seconds, 0 = no limit" }
+      shell:   { type: string, required: false, enum: [auto, powershell, cmd, sh] }
       from_node_id:     { type: string, required: true }
       from_fingerprint: { type: string, required: true }
 

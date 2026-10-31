@@ -11,11 +11,18 @@ C++/Qt implementation of the Weft Protocol:
 
 Both talk TLS to `127.0.0.1:7801` (the same loopback path as `weftlink`), show
 the daemon node identity, discovery counters, peers and pairing state, measure
-Ping RTT, and generate/join one-time 6-character pair codes.
+Ping RTT, and generate/join one-time 6-character pair codes. The GUI also has
+an **M2** tab:
 
-> Scope: this is the M1/M2-era console. File transfer, clipboard and remote
-> execution are not implemented yet. The daemon still enforces pairing; these
-> clients never auto-download or auto-execute anything.
+- send a file to the selected paired peer;
+- open a one-file receive window (or accept from any paired peer);
+- request a remote command and approve/deny pending requests on this machine;
+- enable clipboard receive and push/pull clipboard text;
+- query the selected peer's remote status.
+
+The daemon still enforces explicit consent: receive windows, run approval and
+clipboard opt-in are all required. The TUI currently covers the M1 operations
+(connect/status/ping/pair); its M2 panel is the next step.
 
 ## Build
 

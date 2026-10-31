@@ -26,7 +26,7 @@ int runCheck(const QString &host, quint16 port)
         loop.quit();
     });
     QObject::connect(&client, &weft::Client::statusReceived, &loop,
-                     [&loop, &result](const weft::Status &status) {
+                     [&client, &loop, &result](const weft::Status &status) {
                          QTextStream out(stdout);
                          out << "node_id=" << status.nodeId << '\n';
                          out << "display_name=" << status.displayName << '\n';
@@ -44,6 +44,19 @@ int runCheck(const QString &host, quint16 port)
                                  << peer.address << '|' << (peer.paired ? "paired" : "unpaired")
                                  << '\n';
                          }
+                         client.requestExecRequests();
+                     });
+    QObject::connect(&client, &weft::Client::execRequestsReceived, &loop,
+                     [&client, &loop, &result](const QList<weft::ExecRequest> &requests) {
+                         QTextStream out(stdout);
+                         out << "exec_requests=" << requests.size() << '\n';
+                         client.requestClipboardState();
+                     });
+    QObject::connect(&client, &weft::Client::clipboardStateReceived, &loop,
+                     [&loop, &result](const weft::ClipboardState &state) {
+                         QTextStream out(stdout);
+                         out << "clipboard_active=" << (state.active ? "true" : "false") << '\n';
+                         out << "clipboard_expires=" << state.expiresInSeconds << '\n';
                          result = 0;
                          loop.quit();
                      });

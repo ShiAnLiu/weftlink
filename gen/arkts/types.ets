@@ -120,6 +120,7 @@ export interface ExecRequest {
   command: string;
   cwd: string;
   timeout: number;
+  shell: string;
   from_node_id: string;
   from_fingerprint: string;
 }

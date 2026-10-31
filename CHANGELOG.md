@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- **GUI M2 panel** (`weftlink-gui`): file send/receive, remote status,
+  run-request approval (requests table + approve/deny), and clipboard
+  enable/push/pull, sharing the same Qt client as the CLI.
+- **Remote shell selection**: `weftlink run --shell auto|powershell|cmd|sh`
+  (Windows `auto` = PowerShell with UTF-8 output; Unix `auto` = `/bin/sh`).
+- **UTF-8 console handling**: CLI sets the Windows console to UTF-8, and remote
+  commands force UTF-8 child output so Chinese stdout/stderr stays readable.
 - **`weftlink stop`**: stops the local daemon through a loopback-only
   `shutdown` control verb (remote clients cannot stop a daemon).
 - **File transfer (M2)**: `weftlink send <peer> <file>` and

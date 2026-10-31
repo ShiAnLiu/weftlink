@@ -40,6 +40,7 @@ type execRequestMessage struct {
 	Command         string `json:"command"`
 	Cwd             string `json:"cwd,omitempty"`
 	TimeoutSeconds  int    `json:"timeout_seconds,omitempty"`
+	Shell           string `json:"shell,omitempty"`
 	FromNodeID      string `json:"from_node_id"`
 	FromFingerprint string `json:"from_fingerprint"`
 }
@@ -64,6 +65,7 @@ type execRequestInfo struct {
 	ExecID     string `json:"exec_id"`
 	PeerID     string `json:"peer_id"`
 	Command    string `json:"command"`
+	Shell      string `json:"shell,omitempty"`
 	Cwd        string `json:"cwd,omitempty"`
 	CreatedMs  int64  `json:"created_ms"`
 	AgeSeconds int    `json:"age_seconds"`
@@ -73,6 +75,7 @@ type pendingExec struct {
 	id       string
 	peerID   string
 	command  string
+	shell    string
 	cwd      string
 	timeout  time.Duration
 	created  time.Time
@@ -118,6 +121,12 @@ func handleExecRequest(conn net.Conn, payload []byte) error {
 			Type: "exec_result", ExecID: req.ExecID, OK: false, Error: "command too long",
 		}, 30*time.Second)
 	}
+	var shell, shellErr = normalizeShellName(req.Shell)
+	if shellErr != nil {
+		return writeWire(conn, execResultMessage{
+			Type: "exec_result", ExecID: req.ExecID, OK: false, Error: shellErr.Error(),
+		}, 30*time.Second)
+	}
 	if k, ok := getKnot(req.FromNodeID); !ok ||
 		!strings.EqualFold(k.Fingerprint, req.FromFingerprint) {
 		return writeWire(conn, execResultMessage{
@@ -129,6 +138,7 @@ func handleExecRequest(conn net.Conn, payload []byte) error {
 		id:       req.ExecID,
 		peerID:   req.FromNodeID,
 		command:  req.Command,
+		shell:    shell,
 		cwd:      req.Cwd,
 		timeout:  clampExecTimeout(req.TimeoutSeconds),
 		created:  time.Now(),
@@ -178,25 +188,80 @@ func handleExecRequest(conn net.Conn, payload []byte) error {
 		}, 30*time.Second)
 	}
 
-	var result = executeCommand(req.ExecID, req.Command, req.Cwd, pending.timeout)
+	var result = executeCommand(req.ExecID, req.Command, req.Cwd, pending.timeout, shell)
 	return writeWire(conn, result, 30*time.Second)
 }
 
-func executeCommand(execID string, command string, cwd string, timeout time.Duration) execResultMessage {
+func defaultShellName() string {
+	if runtime.GOOS == "windows" {
+		return "powershell"
+	}
+	return "sh"
+}
+
+func normalizeShellName(shell string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(shell)) {
+	case "", "auto":
+		return defaultShellName(), nil
+	case "pwsh", "powershell":
+		return "powershell", nil
+	case "cmd", "cmd.exe":
+		return "cmd", nil
+	case "sh", "bash":
+		return "sh", nil
+	default:
+		return "", fmt.Errorf("unsupported shell %q (use auto|cmd|powershell|sh)", shell)
+	}
+}
+
+func shellInvocation(shell string, command string) (string, []string, error) {
+	switch shell {
+	case "powershell":
+		if runtime.GOOS != "windows" {
+			return "", nil, fmt.Errorf("powershell is only available on Windows")
+		}
+		var exe, err = exec.LookPath("powershell.exe")
+		if err != nil {
+			return "", nil, fmt.Errorf("powershell not found: %w", err)
+		}
+		return exe, []string{"-NoProfile", "-NonInteractive", "-Command",
+			"[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; " +
+				"$OutputEncoding=[System.Text.Encoding]::UTF8; " + command}, nil
+	case "cmd":
+		if runtime.GOOS != "windows" {
+			return "", nil, fmt.Errorf("cmd is only available on Windows")
+		}
+		var exe = os.Getenv("ComSpec")
+		if exe == "" {
+			exe = "cmd.exe"
+		}
+		return exe, []string{"/C", "chcp 65001 >nul & " + command}, nil
+	case "sh":
+		if runtime.GOOS == "windows" {
+			return "", nil, fmt.Errorf("sh is not available on Windows")
+		}
+		return "/bin/sh", []string{"-c", command}, nil
+	default:
+		return "", nil, fmt.Errorf("unsupported shell %q", shell)
+	}
+}
+
+func executeCommand(execID string, command string, cwd string, timeout time.Duration, shell string) execResultMessage {
 	var result = execResultMessage{Type: "exec_result", ExecID: execID}
+	var normalized, shellErr = normalizeShellName(shell)
+	if shellErr != nil {
+		result.Error = shellErr.Error()
+		return result
+	}
+	var name, args, invokeErr = shellInvocation(normalized, command)
+	if invokeErr != nil {
+		result.Error = invokeErr.Error()
+		return result
+	}
 	var ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		var shell = os.Getenv("ComSpec")
-		if shell == "" {
-			shell = "cmd.exe"
-		}
-		cmd = exec.CommandContext(ctx, shell, "/C", command)
-	} else {
-		cmd = exec.CommandContext(ctx, "/bin/sh", "-c", command)
-	}
+	var cmd = exec.CommandContext(ctx, name, args...)
 	if cwd != "" {
 		var info, err = os.Stat(cwd)
 		if err != nil || !info.IsDir() {
@@ -272,6 +337,7 @@ func listPendingExecs() []execRequestInfo {
 			ExecID:     pending.id,
 			PeerID:     pending.peerID,
 			Command:    pending.command,
+			Shell:      pending.shell,
 			Cwd:        pending.cwd,
 			CreatedMs:  pending.created.UnixMilli(),
 			AgeSeconds: int(now.Sub(pending.created).Seconds()),
@@ -299,7 +365,7 @@ func decideExec(execID string, approve bool) error {
 	return nil
 }
 
-func runRemoteCommand(peerQuery string, command string, timeoutSeconds int) (execResultMessage, error) {
+func runRemoteCommand(peerQuery string, command string, timeoutSeconds int, shell string) (execResultMessage, error) {
 	var k, err = resolvePairedPeer(peerQuery)
 	if err != nil {
 		return execResultMessage{}, err
@@ -328,6 +394,7 @@ func runRemoteCommand(peerQuery string, command string, timeoutSeconds int) (exe
 		ExecID:          execID,
 		Command:         command,
 		TimeoutSeconds:  int(timeout.Seconds()),
+		Shell:           shell,
 		FromNodeID:      localNode.nodeID,
 		FromFingerprint: localNode.fingerprint,
 	}, 15*time.Second); err != nil {

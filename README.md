@@ -29,7 +29,7 @@ Use it:
 ./bin/weftlink status <peer>      # paired peer's status
 ./bin/weftlink recv --from <peer> # receiver opts in to one incoming file
 ./bin/weftlink send <peer> file   # sender transfers to that peer
-./bin/weftlink run <peer> "cmd"  # peer must approve (requests/approve)
+./bin/weftlink run <peer> "cmd"  # peer must approve; --shell auto|powershell|cmd|sh
 ./bin/weftlink clipboard push <peer>   # receiver: clipboard on --from <peer>
 ```
 
@@ -54,8 +54,10 @@ single-use. If discovery is unavailable, pass `--peer <ip[:port]>`.
 
 `clients/cpp` provides two desktop front-ends sharing one Qt 6 Weft client:
 a Qt Widgets GUI (`weftlink-gui`) and a full-screen ANSI TUI (`weftlink-tui`).
-Both show node identity, discovery counters, peers, pairing and Ping RTT.
-Build/deploy instructions: [`clients/cpp/README.md`](clients/cpp/README.md).
+Both show node identity, discovery counters, peers, pairing and Ping RTT; the
+GUI also has an M2 tab for file send/receive, remote status, run approval and
+clipboard push/pull. Build/deploy instructions:
+[`clients/cpp/README.md`](clients/cpp/README.md).
 
 ## Directory Layout
 

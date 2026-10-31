@@ -48,8 +48,9 @@ from the node-to-node message types above.
 | `{"type":"send_file","peer":"...","path":"..."}` | `send_result`: `ok`, `checksum`, `size`, `error` |
 | `{"type":"recv_begin","dir":"...","from":"...","timeout_seconds":300}` | `recv_begin`: `ok`, `dir`, `timeout_seconds`, `error` |
 | `{"type":"recv_wait","timeout_seconds":300}` | `recv_result`: `ok`, `path`, `name`, `size`, `checksum`, `from_node_id`, `error` |
+| `{"type":"recv_poll"}` | `recv_result`: `pending` or the final result (GUI polling) |
 | `{"type":"recv_cancel"}`   | `recv_cancelled`                                            |
-| `{"type":"run_command","peer":"...","command":"...","timeout_seconds":30}` | `run_result`: `ok`, `exit_code`, `stdout`, `stderr`, `error` |
+| `{"type":"run_command","peer":"...","command":"...","timeout_seconds":30,"shell":"auto"}` | `run_result`: `ok`, `exit_code`, `stdout`, `stderr`, `error` |
 | `{"type":"exec_requests"}` | `exec_requests`: pending request list                       |
 | `{"type":"exec_approve","exec_id":"..."}` / `exec_deny` | `exec_action`: `ok`, `error` |
 | `{"type":"clipboard_begin","from":"...","timeout_seconds":600}` | `clipboard_begin`: `ok`, `from`, `expires_in_seconds` |
@@ -122,9 +123,13 @@ Execution is never automatic. A paired sender runs:
 weftlink run <peer> "command"
 ```
 
-The sender daemon sends `ExecRequest` (id, command, timeout, sender identity)
-over TLS. The receiver daemon verifies the sender is a paired knot, replies
-`exec_pending`, and keeps the connection open for up to 2 minutes. The peer
+The sender daemon sends `ExecRequest` (id, command, timeout, shell, sender
+identity) over TLS. `--shell` is `auto` by default: Windows uses PowerShell
+(`powershell.exe -NoProfile -NonInteractive -Command`, with UTF-8 output
+encoding), other platforms use `/bin/sh`. `cmd` and `sh` are also available as
+explicit overrides. The receiver daemon verifies the sender is a paired knot, replies
+`exec_pending`, and keeps the connection open for up to 2 minutes. Requests
+include the shell, so the approver sees exactly what will run. The peer
 user lists and approves it locally:
 
 ```sh

@@ -192,6 +192,29 @@ func cancelReceive() {
 	recvMu.Unlock()
 }
 
+// pollReceive checks for a completed transfer without blocking (GUI polling).
+func pollReceive() (receiveResult, bool) {
+	recvMu.Lock()
+	if recv == nil || recv.ch == nil {
+		recvMu.Unlock()
+		return receiveResult{}, false
+	}
+	var ch = recv.ch
+	recvMu.Unlock()
+
+	select {
+	case result := <-ch:
+		recvMu.Lock()
+		if recv != nil && recv.ch == ch {
+			recv = nil
+		}
+		recvMu.Unlock()
+		return result, true
+	default:
+		return receiveResult{}, false
+	}
+}
+
 func finishReceive(ch chan receiveResult, result receiveResult) {
 	if ch == nil {
 		return

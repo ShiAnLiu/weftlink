@@ -101,6 +101,7 @@ type execRequestInfo struct {
 	ExecID     string `json:"exec_id"`
 	PeerID     string `json:"peer_id"`
 	Command    string `json:"command"`
+	Shell      string `json:"shell"`
 	Cwd        string `json:"cwd"`
 	CreatedMs  int64  `json:"created_ms"`
 	AgeSeconds int    `json:"age_seconds"`

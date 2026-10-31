@@ -164,6 +164,7 @@ type request struct {
 	TimeoutSeconds  int          `json:"timeout_seconds"`
 	ExecID          string       `json:"exec_id"`
 	Command         string       `json:"command"`
+	Shell           string       `json:"shell"`
 	Text            string       `json:"text"`
 	Mime            string       `json:"mime"`
 	FromNodeID      string       `json:"from_node_id"`
@@ -261,6 +262,7 @@ type recvBeginResponse struct {
 type recvWaitResponse struct {
 	Type       string `json:"type"`
 	OK         bool   `json:"ok"`
+	Pending    bool   `json:"pending,omitempty"`
 	Path       string `json:"path,omitempty"`
 	Name       string `json:"name,omitempty"`
 	Size       int64  `json:"size,omitempty"`
@@ -473,12 +475,30 @@ func handleRequest(remote net.Addr, payload []byte) ([]byte, error) {
 			FromNodeID: result.FromNodeID,
 			Error:      result.Error,
 		}
+	case "recv_poll":
+		var result receiveResult
+		var done bool
+		result, done = pollReceive()
+		if !done {
+			resp = recvWaitResponse{Type: "recv_result", OK: true, Pending: true}
+			break
+		}
+		resp = recvWaitResponse{
+			Type:       "recv_result",
+			OK:         result.OK,
+			Path:       result.Path,
+			Name:       result.Name,
+			Size:       result.Size,
+			Checksum:   result.Checksum,
+			FromNodeID: result.FromNodeID,
+			Error:      result.Error,
+		}
 	case "recv_cancel":
 		cancelReceive()
 		resp = recvCancelResponse{Type: "recv_cancelled", OK: true}
 	case "run_command":
 		var result execResultMessage
-		result, err = runRemoteCommand(req.Peer, req.Command, req.TimeoutSeconds)
+		result, err = runRemoteCommand(req.Peer, req.Command, req.TimeoutSeconds, req.Shell)
 		if err != nil {
 			resp = runCommandResponse{Type: "run_result", OK: false, Error: err.Error()}
 			break

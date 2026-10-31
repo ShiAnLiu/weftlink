@@ -9,6 +9,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Widgets Test)
 qt_standard_project_setup()
 
+if (MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 add_library(weftclient STATIC
     weftclient/frame_codec.cpp
     weftclient/weft_client.cpp

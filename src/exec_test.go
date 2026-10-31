@@ -21,7 +21,7 @@ func TestLimitedBuffer(t *testing.T) {
 }
 
 func TestExecuteCommandEcho(t *testing.T) {
-	var result = executeCommand("test", "echo hello", "", 5*time.Second)
+	var result = executeCommand("test", "echo hello", "", 5*time.Second, "auto")
 	if !result.OK {
 		t.Fatalf("command failed: %s", result.Error)
 	}
@@ -34,16 +34,45 @@ func TestExecuteCommandEcho(t *testing.T) {
 }
 
 func TestExecuteCommandExitCode(t *testing.T) {
-	var command = "exit 3"
-	if runtime.GOOS == "windows" {
-		command = "exit /b 3"
-	}
-	var result = executeCommand("test", command, "", 5*time.Second)
+	var result = executeCommand("test", "exit 3", "", 5*time.Second, "auto")
 	if !result.OK {
 		t.Fatalf("command should run: %s", result.Error)
 	}
 	if result.ExitCode != 3 {
 		t.Errorf("exit code = %d, want 3", result.ExitCode)
+	}
+}
+
+func TestExecuteCommandCmdShell(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("cmd.exe is Windows-only")
+	}
+	var result = executeCommand("test", "echo hello-cmd", "", 5*time.Second, "cmd")
+	if !result.OK {
+		t.Fatalf("cmd shell failed: %s", result.Error)
+	}
+	if !strings.Contains(result.Stdout, "hello-cmd") {
+		t.Errorf("stdout = %q", result.Stdout)
+	}
+}
+
+func TestExecuteCommandUTF8(t *testing.T) {
+	var result = executeCommand("test", "echo ??", "", 5*time.Second, "auto")
+	if !result.OK {
+		t.Fatalf("command failed: %s", result.Error)
+	}
+	if !strings.Contains(result.Stdout, "??") {
+		t.Errorf("stdout = %q, want UTF-8 Chinese text", result.Stdout)
+	}
+}
+
+func TestExecuteCommandInvalidShell(t *testing.T) {
+	var result = executeCommand("test", "echo hi", "", time.Second, "no-such-shell")
+	if result.OK {
+		t.Error("unsupported shell should fail")
+	}
+	if !strings.Contains(result.Error, "unsupported shell") {
+		t.Errorf("unexpected error: %q", result.Error)
 	}
 }
 

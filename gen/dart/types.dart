@@ -415,6 +415,7 @@ class ExecRequest {
   final String command;
   final String cwd;
   final int timeout;
+  final String shell;
   final String from_node_id;
   final String from_fingerprint;
 
@@ -423,6 +424,7 @@ class ExecRequest {
     required this.command,
     required this.cwd,
     required this.timeout,
+    required this.shell,
     required this.from_node_id,
     required this.from_fingerprint,
   });
@@ -432,6 +434,7 @@ class ExecRequest {
     command: j['command'],
     cwd: j['cwd'],
     timeout: j['timeout'],
+    shell: j['shell'],
     from_node_id: j['from_node_id'],
     from_fingerprint: j['from_fingerprint'],
   );
@@ -441,6 +444,7 @@ class ExecRequest {
     'command': command,
     'cwd': cwd,
     'timeout': timeout,
+    'shell': shell,
     'from_node_id': from_node_id,
     'from_fingerprint': from_fingerprint,
   };
