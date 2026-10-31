@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0] — 2026-10-31
+
+### Added
+- **Desktop UI** (`clients/flutter/app`): two-pane shell — left rail with
+  daemon endpoint (host/port), Connect / Disconnect, Ping with live latency,
+  node identity and an error card; right pane with the peer list and a
+  timestamped activity log. Material 3, light + dark themes.
+- `CoreClient.ping()` verb (backend by the existing Weft `Ping` message),
+  implemented for loopback and fake clients.
+- `internal/proto`: Weft Protocol framing extracted into a shared package
+  (`ReadFrame` / `WriteFrame`) used by the daemon and available to the CLI.
+- **Release archives**: `weftlink-<version>-<os>-<arch>.zip` (Windows) and
+  `.tar.gz` (Linux/macOS) containing correctly named `weftlink` + `weftlinkd`
+  side by side plus a usage guide, so `weftlink up` works straight out of the
+  box. Raw per-binary assets and `SHA256SUMS` are still published.
+- `docs/dist/HOWTO-Windows.txt`, `docs/dist/README-other.txt`.
+
+### Fixed
+- Desktop UI integration test asserts the daemon's actual node id instead of
+  a hard-coded one; `pumpWidget` runs inside `runAsync` so real socket I/O
+  completes.
+
 ## [0.3.0] — 2026-10-30
 
 ### Added

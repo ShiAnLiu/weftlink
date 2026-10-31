@@ -8,7 +8,7 @@ import "os"
 // Release builds override it with:
 //
 //	-ldflags "-X main.productVersion=<tag without v>"
-var productVersion = "0.3.0"
+var productVersion = "0.4.0"
 
 func coreVersion() string {
 	return productVersion

@@ -89,6 +89,28 @@ jobs:
           echo "built $daemon"
           echo "built $cli"
 
+      - name: Package archive
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          EXT: ${{ matrix.ext }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -eu
+          version="${REF_NAME#v}"
+          mkdir -p pkg
+          # Correct names next to each other: `weftlink up` spawns ./weftlinkd
+          cp "dist/weftlinkd-${GOOS}-${GOARCH}${EXT}" "pkg/weftlinkd${EXT}"
+          cp "dist/weftlink-${GOOS}-${GOARCH}${EXT}"  "pkg/weftlink${EXT}"
+          if [ "$GOOS" = "windows" ]; then
+            cp docs/dist/HOWTO-Windows.txt pkg/HOWTO.txt
+            (cd pkg && zip -q -r "../dist/weftlink-${version}-${GOOS}-${GOARCH}.zip" .)
+          else
+            cp docs/dist/README-other.txt pkg/README.txt
+            (cd pkg && tar czf "../dist/weftlink-${version}-${GOOS}-${GOARCH}.tar.gz" .)
+          fi
+          ls -la dist/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -113,7 +135,8 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum weftlinkd-* weftlink-* > SHA256SUMS
+          rm -f SHA256SUMS
+          sha256sum $(ls -1 | grep -v '^SHA256SUMS$') > SHA256SUMS
           cat SHA256SUMS
 
       - name: List artifacts
